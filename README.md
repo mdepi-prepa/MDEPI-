@@ -3,18 +3,18 @@
 Web app installable (PWA) des étudiants de la MDEPi, prépa EDN à Marseille.
 Lot 1 (socle V1.0) : comptes, promos et groupes de rotation, Accueil, Planning (à venir et replays), annonces, back-office, installation sur le téléphone.
 
-Services : **Supabase** (base de données, connexion, fichiers), **Resend** (envoi des e-mails de connexion) et **Cloudflare Pages** (hébergement).
+Services : **Supabase** (base de données, connexion, fichiers), **Brevo** (envoi des e-mails de connexion, service français) et **Cloudflare Pages** (hébergement).
 
 ## Budget conseillé (offres payantes, pour la fiabilité)
 
 | Service | Offre | Prix indicatif | Ce que ça apporte |
 |---|---|---|---|
 | Supabase | **Pro** | environ 25 $ par mois | Jamais mis en pause, sauvegardes quotidiennes gardées 7 jours, 8 Go de base, 100 Go de fichiers (PDF), support par e-mail |
-| Resend | **Pro** | environ 20 $ par mois | Envoi fiable des codes de connexion (50 000 e-mails par mois), suivi des e-mails non reçus |
+| Brevo (français) | **Starter** | environ 10 € par mois | Envoi fiable des codes de connexion, sans le logo Brevo, interface et support en français, serveurs dans l'UE |
 | Cloudflare Pages | gratuit | 0 € | Déjà fiable et sans limite gênante à cette échelle : inutile de payer |
 | Nom de domaine | ex. `app.mdepi.fr` | environ 10 € par an | Adresse propre, et e-mails moins souvent classés en spam |
 
-Total : environ 45 $ par mois plus le domaine. Les prix sont à vérifier sur chaque site le jour de la souscription. Le code est le même avec ou sans offre payante : seuls les réglages changent.
+Total : environ 35 € par mois plus le domaine. Supabase et Cloudflare n'existent qu'en anglais ; il n'y a pas d'équivalent français de Supabase aussi simple (base + connexion + règles d'accès), donc on le garde. Les prix sont à vérifier sur chaque site le jour de la souscription. Le code est le même avec ou sans offre payante : seuls les réglages changent.
 Option : l'extension *Point-in-time recovery* de Supabase (environ 100 $ par mois) permet de revenir à n'importe quelle minute, utile seulement si les épreuves notées deviennent critiques.
 
 - Cahier des charges : https://claude.ai/artifact/Pb26CT1jSt6js3fY768L5z
@@ -67,7 +67,7 @@ Dans **Authentication** :
    ```
    Objet conseillé : « Votre code de connexion MDEPi ».
    On utilise un code et non un lien : sur iPhone, l'app installée sur l'écran d'accueil ne partage pas sa connexion avec Safari, un lien ouvrirait la mauvaise fenêtre.
-3. **Emails › SMTP Settings** : **indispensable**. Le serveur d'e-mails fourni par Supabase n'envoie que quelques e-mails par heure, pas assez pour 400 étudiants. Créez un compte [Resend](https://resend.com) (offre Pro), validez-y le domaine de la MDEPi (quelques lignes DNS à ajouter chez l'hébergeur du domaine), créez une clé API, puis renseignez ici : hôte `smtp.resend.com`, port `465`, utilisateur `resend`, mot de passe = la clé API, expéditeur par ex. `app@mdepi.fr`. Resend propose aussi un branchement automatique à Supabase (*Integrations*).
+3. **Emails › SMTP Settings** : **indispensable**. Le serveur d'e-mails fourni par Supabase n'envoie que quelques e-mails par heure, pas assez pour 400 étudiants. Créez un compte [Brevo](https://www.brevo.com/fr/) (offre Starter), authentifiez-y le domaine de la MDEPi (*Expéditeurs, domaines et IP dédiées › Domaines* : quelques lignes DNS à ajouter chez l'hébergeur du domaine), puis dans *SMTP & API* générez une clé SMTP. Renseignez ici : hôte `smtp-relay.brevo.com`, port `587`, utilisateur = l'identifiant SMTP affiché par Brevo, mot de passe = la clé SMTP, expéditeur par ex. `app@mdepi.fr`.
 4. **URL Configuration › Site URL** : l'adresse finale de l'app (étape 4).
 
 Seules les adresses présentes dans la liste des inscrits peuvent se connecter : la base refuse toutes les autres (voir `creer_profil` dans le schéma).
@@ -136,5 +136,5 @@ Pas de framework : chaque écran est une fonction qui renvoie du HTML (avec `htm
 - **Filigrane au nom de l'étudiant sur les PDF** : pas encore. Les liens vers les PDF expirent au bout d'une heure, ce qui limite leur partage.
 - **Double authentification pour l'équipe** : Supabase la propose gratuitement (TOTP), l'écran d'activation reste à faire.
 - **Hors connexion** : l'app s'ouvre sans réseau, mais les données ne sont pas encore gardées en cache (prévu avec les cartes et les dossiers au lot 1.1).
-- **Si un jour on repasse en gratuit** : Supabase gratuit limite à 500 Mo de base et 1 Go de fichiers, sans sauvegarde, et met en pause un projet inutilisé 7 jours ; Brevo gratuit (300 e-mails par jour) peut remplacer Resend.
+- **Si un jour on repasse en gratuit** : Supabase gratuit limite à 500 Mo de base et 1 Go de fichiers, sans sauvegarde, et met en pause un projet inutilisé 7 jours ; l'offre gratuite de Brevo (300 e-mails par jour, avec le logo Brevo) suffit aussi.
 - **Lot 1.1** : import QTI Théia (le parseur testé est prêt), entraînement, cartes, progrès, épreuves avec classement.
