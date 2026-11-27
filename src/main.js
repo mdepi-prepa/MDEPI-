@@ -179,6 +179,26 @@ async function demarrer() {
   }
 }
 
+// Après une mise en ligne, un onglet resté ouvert réclame d'anciens fichiers
+// (ex. jszip-ANCIEN.js) qui n'existent plus : on recharge une fois la page
+// pour prendre la nouvelle version, au lieu d'afficher une erreur.
+window.addEventListener('vite:preloadError', (e) => {
+  let dernier = 0;
+  try {
+    dernier = Number(sessionStorage.getItem('mdepi-recharge') || 0);
+  } catch {
+    /* ignoré */
+  }
+  if (Date.now() - dernier < 30000) return; // déjà rechargé : on laisse l'erreur s'afficher
+  e.preventDefault();
+  try {
+    sessionStorage.setItem('mdepi-recharge', String(Date.now()));
+  } catch {
+    /* ignoré */
+  }
+  location.reload();
+});
+
 demarrer().catch((e) => {
   // Sans ce filet, une erreur au démarrage (clé ou adresse Supabase invalide…)
   // laisse une page blanche.

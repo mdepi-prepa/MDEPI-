@@ -2,7 +2,7 @@
 // - Pages : réseau d'abord, copie en cache si pas de réseau.
 // - Fichiers de l'app (JS, CSS, icônes) : cache d'abord (leurs noms changent à chaque version).
 // - Données Supabase : jamais mises en cache ici (toujours à jour, et privées).
-const VERSION = 'mdepi-v2';
+const VERSION = 'mdepi-v3';
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(VERSION).then((c) => c.addAll(['./', './index.html', './manifest.webmanifest', './icons/icon-192.png'])));
@@ -38,7 +38,9 @@ self.addEventListener('fetch', (e) => {
       (enCache) =>
         enCache ||
         fetch(req).then((rep) => {
-          if (rep.ok) {
+          // Jamais de page HTML en cache à la place d'un fichier JS ou CSS
+          // (un fichier disparu renvoie la page d'accueil ou une 404).
+          if (rep.ok && !(rep.headers.get('content-type') || '').includes('text/html')) {
             const copie = rep.clone();
             caches.open(VERSION).then((c) => c.put(req, copie));
           }
