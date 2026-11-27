@@ -1,6 +1,7 @@
 // Outils communs aux QCM des épreuves : séries, lettres, images, exports.
 import { assainir } from './qti.js';
-import { points, noteSur20 } from './bareme.js';
+import { pointsPonderes, coefficient, noteSur20 } from './bareme.js';
+import { corrigerQroc, cle } from './qroc.js';
 
 // Une épreuve dupliquée pour un autre groupe garde le même QCM : la « série »
 // est l'id de la séance d'origine.
@@ -11,6 +12,7 @@ export const lettre = (i) => String.fromCharCode(65 + i);
 export const LIBELLES_TYPES = {
   QRU: 'Question à réponse unique',
   QRM: 'Question à réponses multiples',
+  QRP: 'Question à réponses précisées',
   QROC: 'Question à réponse ouverte et courte',
 };
 
@@ -62,10 +64,27 @@ export function noterCopie(questions, corrections, reponses) {
   for (const q of questions) {
     const c = corrections[q.id];
     if (!c) continue;
-    total++;
-    pts += points(q, c, reponses[q.id]);
+    total += coefficient(q);
+    pts += pointsPonderes(q, c, reponses?.[q.id]);
   }
   return { points: Math.round(pts * 100) / 100, total, note20: noteSur20(pts, total) };
+}
+
+// Réponses de QROC à corriger par l'équipe (même règle que qroc_a_corriger,
+// schema.sql) : groupes de réponses ni reconnues exactement, ni refusées, ni
+// jugées acceptables, sur les questions ni neutralisées ni annulées.
+export function qrocACorriger(questions, corrections, copies) {
+  const vus = new Set();
+  for (const q of questions) {
+    if (q.type !== 'QROC' || (q.statut && q.statut !== 'normale')) continue;
+    const c = corrections[q.id] || {};
+    for (const cp of copies) {
+      const t = cp.reponses.find((x) => x.question_id === q.id)?.texte;
+      const m = corrigerQroc(t, c.reponses_qroc, c.refusees_qroc, c.partielles_qroc).mode;
+      if (m === 'approche' || m === 'faux') vus.add(q.id + '|' + cle(t));
+    }
+  }
+  return vus.size;
 }
 
 // Texte brut d'un énoncé HTML (exports CSV).
@@ -121,7 +140,7 @@ export function csvCopies(qcm, corrections, resultats, copies) {
         r.nom, r.prenom, r.email, r.groupe, q.dossier.titre, `Q${q.qi + 1}`, q.type,
         lettres(x?.choix), x?.texte || '', x?.validee ? 'oui' : 'non',
         q.type === 'QROC' ? (c.reponses_qroc || []).join(' | ') : lettres(c.bonnes),
-        virgule(c.bonnes || c.reponses_qroc ? points(q, c, x) : ''),
+        virgule(c.bonnes || c.reponses_qroc ? pointsPonderes(q, c, x) : ''),
         dateHeure(x?.modifiee_le),
       ]);
     }

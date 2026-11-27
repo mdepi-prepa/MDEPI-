@@ -185,7 +185,7 @@ export async function vueAdminSeance(app, { id, copie, epreuve }) {
         replay_url: String(d.get('replay_url')).trim() || null,
         replay_duree_min: d.get('replay_duree_min') ? Number(d.get('replay_duree_min')) : null,
       };
-      if (copie && donnees.epreuve) Object.assign(donnees, { serie: s.serie, correction_publiee: !!s.correction_publiee });
+      if (copie && donnees.epreuve) Object.assign(donnees, { serie: s.serie, correction_publiee: !!s.correction_publiee, publication: s.publication || 'cloture', publication_le: s.publication_le || null });
       // Changement de salle, d'horaire ou annulation : signalé aux étudiants.
       if (!nouvelle) {
         const change =

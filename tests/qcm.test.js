@@ -4,7 +4,8 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { parsePackage, versDossiers, assainir } from '../src/lib/qti.js';
-import { points, verdict, noteSur20, discordances } from '../src/lib/bareme.js';
+import { points, verdict, noteSur20, discordances, pointsPonderes } from '../src/lib/bareme.js';
+import { noterCopie } from '../src/lib/qcm.js';
 
 const dossierFixture = join(__dirname, 'fixtures/theia-dp-hge');
 const fichiers = Object.fromEntries(readdirSync(dossierFixture).map((n) => [n, readFileSync(join(dossierFixture, n), 'utf8')]));
@@ -12,6 +13,13 @@ const fichiers = Object.fromEntries(readdirSync(dossierFixture).map((n) => [n, r
 describe('import du vrai export Théia', async () => {
   const res = await parsePackage(fichiers);
   const dossiers = versDossiers(res.questions);
+
+  it('lit la pondération du pool (coefficient 1) ; aucune QRP dans cet export', () => {
+    for (const q of dossiers[0].questions) {
+      expect(q.coefficient).toBe(1);
+      expect(q.type).not.toBe('QRP');
+    }
+  });
 
   it('reconnaît un dossier progressif de 6 questions, dans l’ordre du pool', () => {
     expect(dossiers).toHaveLength(1);
@@ -145,5 +153,41 @@ describe('propositions indispensables et inacceptables', () => {
   });
   it('QRU : inacceptable cochée = 0', () => {
     expect(points({ ...q, type: 'QRU' }, { bonnes: ['A'], inacceptables: ['C'] }, { choix: ['C'] })).toBe(0);
+  });
+});
+
+describe('QRP, demi-point de QROC, coefficients', () => {
+  const props = ['A', 'B', 'C', 'D', 'E'].map((id) => ({ id }));
+  const qrp = { type: 'QRP', nb_reponses: 3, propositions: props };
+  const c = { bonnes: ['A', 'B', 'C'] };
+  it('QRP : bonnes cochées ÷ n, 0 au-delà de n cases ou sans réponse', () => {
+    expect(points(qrp, c, { choix: ['A', 'B', 'C'] })).toBe(1);
+    expect(points(qrp, c, { choix: ['A', 'B'] })).toBeCloseTo(2 / 3);
+    expect(points(qrp, c, { choix: ['A', 'D'] })).toBeCloseTo(1 / 3);
+    expect(points(qrp, c, { choix: ['A', 'B', 'C', 'D'] })).toBe(0);
+    expect(points(qrp, c, { choix: [] })).toBe(0);
+    expect(points(qrp, { ...c, indispensables: ['C'] }, { choix: ['A', 'B'] })).toBe(0);
+  });
+  it('QRP importée : maxChoices plus petit que le nombre de propositions', () => {
+    const q = { id: 'X', type: 'QRM', maxChoix: 2, propositions: props.map((p, i) => ({ ...p, texte: '', correcte: i < 2 })), coefficient: 2 };
+    const [d] = versDossiers([q]);
+    expect(d.questions[0]).toMatchObject({ type: 'QRP', nb_reponses: 2, coefficient: 2 });
+  });
+  it('QROC jugée acceptable : 0,5 ; refusée : 0', () => {
+    const q = { type: 'QROC' };
+    const k = { reponses_qroc: ['ECG'], partielles_qroc: ['holter'], refusees_qroc: ['scanner'] };
+    expect(points(q, k, { texte: 'électrocardiogramme' })).toBe(1);
+    expect(points(q, k, { texte: 'Holter' })).toBe(0.5);
+    expect(points(q, k, { texte: 'scanner' })).toBe(0);
+  });
+  it('coefficient, question neutralisée ou annulée', () => {
+    const q1 = { id: 'q1', type: 'QRM', propositions: props, coefficient: 3 };
+    const q2 = { id: 'q2', type: 'QROC', coefficient: 1 };
+    const corr = { q1: { bonnes: ['A', 'B'] }, q2: { reponses_qroc: ['ECG'] } };
+    const rep = { q1: { choix: ['A'] }, q2: { texte: 'ECG' } };
+    expect(pointsPonderes(q1, corr.q1, rep.q1)).toBe(1.5);
+    expect(noterCopie([q1, q2], corr, rep)).toEqual({ points: 2.5, total: 4, note20: 12.5 });
+    expect(noterCopie([{ ...q1, statut: 'neutralisee' }, q2], corr, rep)).toEqual({ points: 4, total: 4, note20: 20 });
+    expect(noterCopie([{ ...q1, statut: 'annulee' }, q2], corr, rep)).toEqual({ points: 1, total: 1, note20: 20 });
   });
 });

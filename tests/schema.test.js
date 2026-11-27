@@ -208,7 +208,7 @@ describe('QCM des épreuves', () => {
     expect(await en(ids.leo, 'select * from plan_qcm($1)', [q.e2])).toEqual([]);
     expect((await en(ids.prof, 'select qti_id from questions where serie_id = $1', [q.e])).length).toBe(2);
     expect(await en(ids.leo, 'select * from questions')).toEqual([]);
-    expect(await en(ids.leo, 'select * from infos_qcm($1)', [q.e2])).toEqual([{ questions: 2, dossiers: 1, correction_visible: false, groupes_restants: 2 }]);
+    expect(await en(ids.leo, 'select * from infos_qcm($1)', [q.e2])).toMatchObject([{ questions: 2, dossiers: 1, correction_visible: false, groupes_restants: 2, resultats_publies: false, publication: 'cloture', qroc_en_cours: false }]);
     expect(await en(ids.ines, 'select * from infos_qcm($1)', [q.e2])).toEqual([]);
     expect(await en(ids.camille, 'select * from corrections')).toEqual([]);
     expect(await en(ids.ines, 'select * from questions')).toEqual([]);
@@ -282,6 +282,75 @@ describe('QCM des épreuves', () => {
     // Camille avait coché C (inacceptable) en Q1 : 0 au lieu de 0,5.
     expect(Number((await en(ids.camille, 'select points from mon_resultat($1)', [q.e]))[0].points)).toBe(1);
     await en(ids.prof, `update corrections set inacceptables = '{}' where question_id = $1`, [q.q1]);
+  });
+  it('QRP : bonnes cochées ÷ n ; QROC « acceptable » : 0,5', async () => {
+    const props = '[{"id":"A"},{"id":"B"},{"id":"C"},{"id":"D"},{"id":"E"}]';
+    const qrp = async (choix, inacc = []) =>
+      Number((await db.query(`select points('QRP', $1::jsonb, '{A,B,C}', '{}', $2, '', '{}', '{}', $3, '{}', 3) as p`, [props, choix, inacc])).rows[0].p);
+    expect(await qrp(['A', 'B', 'C'])).toBe(1);
+    expect((await qrp(['A', 'B'])).toFixed(4)).toBe('0.6667');
+    expect((await qrp(['A', 'D'])).toFixed(4)).toBe('0.3333');
+    expect(await qrp(['A', 'B', 'C', 'D'])).toBe(0); // plus de n cases
+    expect(await qrp([])).toBe(0);
+    expect(await qrp(['A', 'B', 'E'], ['E'])).toBe(0);
+    const qroc = async (texte) =>
+      Number((await db.query(`select points('QROC', '[]', '{}', '{ECG}', '{}', $1, '{}', '{}', '{}', '{holter}') as p`, [texte])).rows[0].p);
+    expect(await qroc('électrocardiogramme')).toBe(1);
+    expect(await qroc('Holter')).toBe(0.5);
+    expect(await qroc('scanner')).toBe(0);
+  });
+  it('une QRP ne prend pas plus de n cases', async () => {
+    const [d] = await en(ids.prof, `select id from dossiers where serie_id = $1`, [q.e]);
+    await db.query(`update seances set fin = now() + interval '1 hour' where id = $1`, [q.e]);
+    const [x] = await en(ids.prof, `insert into questions (serie_id, dossier_id, qti_id, ordre, type, nb_reponses, propositions) values ($1, $2, 'Q0', 0, 'QRP', 2, '[{"id":"A"},{"id":"B"},{"id":"C"}]') returning id`, [q.e, d.id]);
+    await db.query(`update copies set rendue_le = null where user_id = $1`, [ids.camille]);
+    await expect(en(ids.camille, `select enregistrer_reponse($1, $2, '{A,B,C}', '', false)`, [q.e, x.id])).rejects.toThrow(/Trop de cases/);
+    await en(ids.camille, `select enregistrer_reponse($1, $2, '{A,B}', '', false)`, [q.e, x.id]);
+    await db.query(`delete from reponses where question_id = $1`, [x.id]);
+    await db.query(`delete from questions where id = $1`, [x.id]);
+    await db.query(`update copies set rendue_le = now() where user_id = $1`, [ids.camille]);
+    await db.query(`update seances set fin = now() - interval '3 minutes' where id = $1`, [q.e]);
+  });
+  it('coefficients ; question neutralisée (points pour tous) ou annulée (retirée de la note)', async () => {
+    const note = async () => {
+      const [r] = await en(ids.camille, 'select points, total, note20 from mon_resultat($1)', [q.e]);
+      return [Number(r.points), r.total, Number(r.note20)];
+    };
+    expect(await note()).toEqual([1.5, 2, 15]);
+    await en(ids.prof, `update questions set coefficient = 3 where id = $1`, [q.q1]);
+    expect(await note()).toEqual([2.5, 4, 12.5]); // 3 × 0,5 + 1
+    await en(ids.prof, `update questions set statut = 'neutralisee' where id = $1`, [q.q1]);
+    expect(await note()).toEqual([4, 4, 20]);
+    await en(ids.prof, `update questions set statut = 'annulee' where id = $1`, [q.q1]);
+    expect(await note()).toEqual([1, 1, 20]);
+    await en(ids.camille, `update questions set statut = 'normale' where id = $1`, [q.q1]); // sans effet : réservé à l'équipe
+    expect(await note()).toEqual([1, 1, 20]);
+    await en(ids.prof, `update questions set statut = 'normale', coefficient = 1 where id = $1`, [q.q1]);
+    expect(await note()).toEqual([1.5, 2, 15]);
+  });
+  it('note et rang cachés tant que des réponses de QROC restent à corriger', async () => {
+    // Plus aucune réponse acceptée ne correspond : les deux réponses sont « à corriger ».
+    await en(ids.prof, `update corrections set reponses_qroc = '{scanner}' where question_id = $1`, [q.q2]);
+    expect(await en(ids.camille, 'select * from mon_resultat($1)', [q.e])).toEqual([]);
+    expect((await en(ids.camille, 'select qroc_en_cours from infos_qcm($1)', [q.e]))[0].qroc_en_cours).toBe(true);
+    // L'équipe tranche : « ECG » / « Électrocardiogramme » (même réponse une fois mise en forme) jugée acceptable (0,5).
+    await en(ids.prof, `update corrections set partielles_qroc = '{ECG}' where question_id = $1`, [q.q2]);
+    expect(Number((await en(ids.camille, 'select points from mon_resultat($1)', [q.e]))[0].points)).toBe(1); // 0,5 + 0,5
+    await en(ids.prof, `update corrections set reponses_qroc = '{ECG,électrocardiogramme}', partielles_qroc = '{}', refusees_qroc = '{}' where question_id = $1`, [q.q2]);
+    expect(Number((await en(ids.camille, 'select points from mon_resultat($1)', [q.e]))[0].points)).toBe(1.5);
+  });
+  it('publication des résultats : jamais, ou à partir d’une date', async () => {
+    await en(ids.prof, `update seances set publication = 'jamais' where id = $1`, [q.e]);
+    expect(await en(ids.camille, 'select * from mon_resultat($1)', [q.e])).toEqual([]);
+    expect(await en(ids.camille, 'select * from corrections')).toEqual([]);
+    expect((await en(ids.camille, 'select resultats_publies, correction_visible from infos_qcm($1)', [q.e]))[0]).toEqual({ resultats_publies: false, correction_visible: false });
+    await en(ids.prof, `update seances set publication = 'date', publication_le = now() + interval '1 day' where id = $1`, [q.e]);
+    expect(await en(ids.camille, 'select * from mon_resultat($1)', [q.e])).toEqual([]);
+    await en(ids.prof, `update seances set publication_le = now() - interval '1 minute' where id = $1`, [q.e]);
+    expect((await en(ids.camille, 'select * from mon_resultat($1)', [q.e])).length).toBe(1);
+    expect((await en(ids.camille, 'select * from corrections')).length).toBe(2);
+    await expect(en(ids.prof, `update seances set publication = 'demain' where id = $1`, [q.e])).rejects.toThrow(/check/);
+    await en(ids.prof, `update seances set publication = 'cloture', publication_le = null where id = $1`, [q.e]);
   });
   it('la note d’une copie ne se lit pas directement (seulement via mon résultat)', async () => {
     const [c] = await db.query('select id from copies where user_id = $1', [ids.leo]).then((r) => r.rows);
