@@ -11,7 +11,7 @@ Services : **Supabase** (base de données, connexion, fichiers), **Brevo** (envo
 |---|---|---|---|
 | Supabase | **Pro** | environ 25 $ par mois | Jamais mis en pause, sauvegardes quotidiennes gardées 7 jours, 8 Go de base, 100 Go de fichiers (PDF), support par e-mail |
 | Brevo (français) | **Starter** | environ 10 € par mois | Envoi fiable des codes de connexion, sans le logo Brevo, interface et support en français, serveurs dans l'UE |
-| Cloudflare Workers | gratuit | 0 € | Déjà fiable et sans limite gênante à cette échelle : inutile de payer |
+| Cloudflare Pages | gratuit | 0 € | Déjà fiable et sans limite gênante à cette échelle : inutile de payer |
 | Nom de domaine | ex. `app.mdepi.fr` | environ 10 € par an | Adresse propre, et e-mails moins souvent classés en spam |
 
 Total : environ 35 € par mois plus le domaine. Supabase et Cloudflare n'existent qu'en anglais ; il n'y a pas d'équivalent français de Supabase aussi simple (base + connexion + règles d'accès), donc on le garde. Les prix sont à vérifier sur chaque site le jour de la souscription. Le code est le même avec ou sans offre payante : seuls les réglages changent.
@@ -82,14 +82,14 @@ Dans **Project Settings › API**, copiez l'URL du projet et la clé **anon publ
 
 Quand `supabase/schema.sql` change (nouvelle fonctionnalité, correctif), recollez le fichier entier dans **SQL Editor › New query** et cliquez **Run**. Le script se relance sans rien perdre : il ajoute seulement ce qui manque (tables, colonnes, règles d'accès) et remplace les fonctions. Aucune donnée (inscrits, séances, copies, notes) n'est effacée.
 
-### 4. Mettre en ligne (Cloudflare Workers, gratuit)
+### 4. Mettre en ligne (Cloudflare Pages, gratuit)
 
-1. Compte gratuit sur https://dash.cloudflare.com › **Workers & Pages › Create › Import a repository**, choisissez le dépôt GitHub. Nom du projet : `mdepi`.
-2. Réglages : commande de build `npm run build`, commande de déploiement `npx wrangler deploy`. Le fichier `wrangler.jsonc` du dépôt fait le reste : il publie le dossier `dist` et renvoie vers l'app toute adresse inconnue.
-3. **Settings › Build › Variables and secrets** : ajoutez `VITE_SUPABASE_URL` et `VITE_SUPABASE_ANON_KEY` (mêmes valeurs que `.env`). Ce sont des variables **de build** : elles sont intégrées à l'app au moment de la compilation. Ne les mettez pas dans les variables d'exécution du Worker (**Settings › Variables and secrets** en haut de page), où l'app ne les verrait pas. Après les avoir ajoutées, relancez un déploiement.
-4. Chaque push sur `main` met l'app à jour automatiquement. Un nom de domaine (par ex. `app.mdepi.fr`) se branche dans **Domains**.
+1. Compte gratuit sur https://dash.cloudflare.com › **Workers & Pages › Create › Pages › Connect to Git**, choisissez le dépôt GitHub. Nom du projet : `mdepi`.
+2. Réglages de build : *Framework preset* `Vite`, commande `npm run build`, dossier `dist`.
+3. **Environment variables** : ajoutez `VITE_SUPABASE_URL` et `VITE_SUPABASE_ANON_KEY` (mêmes valeurs que `.env`), puis **Save and Deploy**. Elles sont lues au moment du build : après tout changement, relancez un déploiement. Sans elles, l'app s'ouvre en mode démo.
+4. Chaque push sur `main` met l'app à jour automatiquement. Un nom de domaine (par ex. `app.mdepi.fr`) se branche dans **Custom domains**.
 
-Un projet Cloudflare **Pages** marche aussi (commande `npm run build`, dossier `dist`, mêmes variables) ; `wrangler.jsonc` est alors ignoré.
+Pages ignore le fichier `wrangler.jsonc` (il ne contient pas `pages_build_output_dir`). Ce fichier sert seulement si l'on choisit un projet **Workers** à la place : commande de déploiement `npx wrangler deploy`, et les deux variables dans **Settings › Build › Variables and secrets** (variables de build, pas celles du Worker).
 
 GitHub Pages n'est pas conseillé ici : pour un dépôt privé, il demande un abonnement payant.
 
