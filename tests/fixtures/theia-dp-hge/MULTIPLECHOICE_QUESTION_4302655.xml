@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<assessmentItem xmlns="http://www.imsglobal.org/xsd/imsqti_v2p1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" identifier="MULTIPLECHOICE_QUESTION_4302655" title="Question à réponses multiples" timeDependent="false" adaptive="false" toolName="Theia" xsi:schemaLocation="http://www.imsglobal.org/xsd/imsqti_v2p1 http://www.imsglobal.org/xsd/qti/qtiv2p1/imsqti_v2p1.xsd">
+  <responseDeclaration identifier="RESPONSE" cardinality="multiple" baseType="identifier">
+    <correctResponse>
+      <value>CHOICE_9018021</value>
+      <value>CHOICE_9018022</value>
+      <value>CHOICE_9018024</value>
+    </correctResponse>
+  </responseDeclaration>
+  <outcomeDeclaration identifier="SCORE" cardinality="single" baseType="integer">
+    <defaultValue>
+      <value>0</value>
+    </defaultValue>
+  </outcomeDeclaration>
+  <itemBody>
+    <choiceInteraction responseIdentifier="MULTIPLECHOICE_QUESTION_4302655" maxChoices="6">
+      <prompt>
+        <div>&lt;p&gt;&lt;span style="font-size:24pt;font-family:Calibri;color:#000000;font-weight:bold;"&gt;Q5 :&lt;/span&gt;&lt;span style="font-size:24pt;font-family:Calibri;color:#000000;"&gt; Concernant la prise en charge endoscopique de cette complication, quelles propositions sont exactes ?&lt;/span&gt;&lt;/p&gt;</div>
+      </prompt>
+      <simpleChoice identifier="CHOICE_9018021">
+        <div>&lt;div style="margin-top:5.76pt;margin-bottom:0pt;text-align:left;"&gt;&lt;span style="font-size:24pt;"&gt;&lt;span style="font-family:Arial;"&gt;•&lt;/span&gt;&lt;/span&gt;&lt;span style="font-size:24pt;font-family:Calibri;color:#000000;"&gt;A. La CPRE permet le drainage de la voie biliaire principale.&lt;/span&gt;&lt;/div&gt;</div>
+      </simpleChoice>
+      <simpleChoice identifier="CHOICE_9018022">
+        <div>&lt;div style="margin-top:5.76pt;margin-bottom:0pt;text-align:left;"&gt;&lt;span style="font-size:24pt;"&gt;&lt;span style="font-family:Arial;"&gt;•&lt;/span&gt;&lt;/span&gt;&lt;span style="font-size:24pt;font-family:Calibri;color:#000000;"&gt;B. Une nouvelle prothèse biliaire peut être mise en place afin d'assurer un drainage efficace.&lt;/span&gt;&lt;/div&gt;</div>
+      </simpleChoice>
+      <simpleChoice identifier="CHOICE_9018023">
+        <div>&lt;div style="margin-top:5.76pt;margin-bottom:0pt;text-align:left;"&gt;&lt;span style="font-size:24pt;"&gt;&lt;span style="font-family:Arial;"&gt;•&lt;/span&gt;&lt;/span&gt;&lt;span style="font-size:24pt;font-family:Calibri;color:#000000;"&gt;C. L'extraction complète des calculs résiduels est obligatoire lors du geste initial, même chez un patient instable.&lt;/span&gt;&lt;/div&gt;</div>
+      </simpleChoice>
+      <simpleChoice identifier="CHOICE_9018024">
+        <div>&lt;div style="margin-top:5.76pt;margin-bottom:0pt;text-align:left;"&gt;&lt;span style="font-size:24pt;"&gt;&lt;span style="font-family:Arial;"&gt;•&lt;/span&gt;&lt;/span&gt;&lt;span style="font-size:24pt;font-family:Calibri;color:#000000;"&gt;D. Un prélèvement de bile à visée bactériologique peut être réalisé lors de la CPRE.&lt;/span&gt;&lt;/div&gt;</div>
+      </simpleChoice>
+      <simpleChoice identifier="CHOICE_9018025">
+        <div>&lt;div style="margin-top:5.76pt;margin-bottom:0pt;text-align:left;"&gt;&lt;span style="font-size:24pt;"&gt;&lt;span style="font-family:Arial;"&gt;•&lt;/span&gt;&lt;/span&gt;&lt;span style="font-size:24pt;font-family:Calibri;color:#000000;"&gt;E. L'antibiothérapie seule est toujours suffisante pour traiter l'infection, même lorsque la prothèse reste obstruée.&lt;/span&gt;&lt;/div&gt;</div>
+      </simpleChoice>
+      <simpleChoice identifier="CHOICE_9018061">
+        <div>&lt;div style="margin-top:5.76pt;margin-bottom:0pt;text-align:left;"&gt;&lt;span style="font-size:24pt;"&gt;&lt;span style="font-family:Arial;"&gt;•&lt;/span&gt;&lt;/span&gt;&lt;span style="font-size:24pt;font-family:Calibri;color:#000000;"&gt;F. Une antibiothérapie &lt;/span&gt;&lt;span style="font-size:24pt;font-family:Calibri;color:#000000;"&gt;visan&lt;/span&gt;&lt;/div&gt;</div>
+      </simpleChoice>
+    </choiceInteraction>
+  </itemBody>
+  <modalFeedback outcomeIdentifier="COMMENT_QUESTION" identifier="COMMENT_QUESTION" showHide="show">
+    <div>&lt;div style="margin-top:5.76pt;margin-bottom:0pt;text-align:left;"&gt;&lt;span style="font-size:24pt;"&gt;&lt;span style="font-family:Arial;"&gt;•&lt;/span&gt;&lt;/span&gt;&lt;span style="font-size:24pt;font-family:Calibri;color:#00b050;"&gt;A. La CPRE permet le drainage de la voie biliaire principale.&lt;/span&gt;&lt;/div&gt;
+&lt;div style="margin-top:5.76pt;margin-bottom:0pt;text-align:left;"&gt;&lt;span style="font-size:24pt;"&gt;&lt;span style="font-family:Arial;"&gt;•&lt;/span&gt;&lt;/span&gt;&lt;span style="font-size:24pt;font-family:Calibri;color:#00b050;"&gt;B. Une nouvelle prothèse biliaire peut être mise en place afin d'assurer un drainage efficace.&lt;/span&gt;&lt;/div&gt;
+&lt;div style="margin-top:5.76pt;margin-bottom:0pt;text-align:left;"&gt;&lt;span style="font-size:24pt;"&gt;&lt;span style="font-family:Arial;"&gt;•&lt;/span&gt;&lt;/span&gt;&lt;span style="font-size:24pt;font-family:Calibri;color:#FF0000;"&gt;C. L'extraction complète des calculs résiduels est obligatoire lors du geste initial, même chez un patient instable.&lt;/span&gt;&lt;/div&gt;
+&lt;div style="margin-top:5.76pt;margin-bottom:0pt;text-align:left;"&gt;&lt;span style="font-size:24pt;"&gt;&lt;span style="font-family:Arial;"&gt;•&lt;/span&gt;&lt;/span&gt;&lt;span style="font-size:24pt;font-family:Calibri;color:#00b050;"&gt;D. Un prélèvement de bile à visée bactériologique peut être réalisé lors de la CPRE.&lt;/span&gt;&lt;/div&gt;
+&lt;div style="margin-top:5.76pt;margin-bottom:0pt;text-align:left;"&gt;&lt;span style="font-size:24pt;"&gt;&lt;span style="font-family:Arial;"&gt;•&lt;/span&gt;&lt;/span&gt;&lt;span style="font-size:24pt;font-family:Calibri;color:#FF0000;"&gt;E. L'antibiothérapie seule est toujours suffisante pour traiter l'infection, même lorsque la prothèse reste obstruée. &lt;/span&gt;&lt;span style="font-size:24pt;font-family:Calibri;color:#FF0000;font-weight:bold;"&gt;Faux !&lt;/span&gt;&lt;span style="font-size:24pt;font-family:Calibri;color:#FF0000;"&gt; &lt;/span&gt;&lt;span style="font-size:24pt;font-family:Calibri;color:#FF0000;font-weight:bold;"&gt;Chez un patient instable, la priorité est de restaurer un drainage efficace. L'extraction complète des calculs peut être réalisée secondairement si elle nécessite une procédure prolongée ou  complexe&lt;/span&gt;&lt;span style="font-size:24pt;font-family:Calibri;color:#FF0000;font-weight:bold;"&gt;.&lt;/span&gt;&lt;/div&gt;
+&lt;div style="margin-top:5.76pt;margin-bottom:0pt;text-align:left;"&gt;&lt;span style="font-size:24pt;"&gt;&lt;span style="font-family:Arial;"&gt;•&lt;/span&gt;&lt;/span&gt;&lt;span style="font-size:24pt;font-family:Calibri;color:#7030a0;font-weight:bold;"&gt;F. Une antibiothérapie &lt;/span&gt;&lt;span style="font-size:24pt;font-family:Calibri;color:#7030a0;font-weight:bold;"&gt;visan&lt;/span&gt;&lt;span style="font-size:24pt;font-family:Calibri;color:#7030a0;font-weight:bold;"&gt; … BUG D’ENONCE ! STAY FOCUS&lt;/span&gt;&lt;/div&gt;</div>
+  </modalFeedback>
+</assessmentItem>
