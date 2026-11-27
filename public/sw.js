@@ -2,7 +2,7 @@
 // - Pages : réseau d'abord, copie en cache si pas de réseau.
 // - Fichiers de l'app (JS, CSS, icônes) : cache d'abord (leurs noms changent à chaque version).
 // - Données Supabase : jamais mises en cache ici (toujours à jour, et privées).
-const VERSION = 'mdepi-v1';
+const VERSION = 'mdepi-v2';
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(VERSION).then((c) => c.addAll(['./', './index.html', './manifest.webmanifest', './icons/icon-192.png'])));

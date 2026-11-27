@@ -2,6 +2,7 @@
 // Le code est préféré au lien magique : sur iPhone, l'app installée sur
 // l'écran d'accueil ne partage pas sa session avec Safari.
 import { html } from '../lib/html.js';
+import { logoComplet } from '../lib/logo.js';
 import { libellePromo } from '../lib/promos.js';
 import { CODE_DEMO } from '../data/demo.js';
 
@@ -12,8 +13,7 @@ export async function vueConnexion(app) {
 
   const vue = html`<div class="connexion">
     <div class="connexion-carte">
-      <div class="connexion-marque"><span class="logo grand">MD</span>
-        <div><div class="titre-app">MDEPi</div><div class="sous-titre">Prépa EDN · Marseille</div></div></div>
+      <div class="connexion-marque">${logoComplet()}</div>
 
       <form id="f-email" class="pile">
         <h1>Connexion</h1>

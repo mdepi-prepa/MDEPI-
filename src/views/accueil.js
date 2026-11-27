@@ -1,6 +1,7 @@
 // Accueil : prochaine conférence, annonces, accès rapides.
 import { html } from '../lib/html.js';
 import { icones } from '../lib/icones.js';
+import { logoCompact } from '../lib/logo.js';
 import { dateLongue, plageHoraire, compteARebours, ilYA } from '../lib/dates.js';
 import { estEquipe } from '../lib/acces.js';
 import { badgePromo, boutonZoom, vide } from './commun.js';
@@ -18,7 +19,7 @@ export async function vueAccueil(app) {
 
   const vue = html`<div class="page">
     <header class="entete-accueil">
-      <a href="#/profil" class="logo" aria-label="Mon compte">MD</a>
+      <a href="#/profil" class="logo" aria-label="Mon compte">${logoCompact()}</a>
       <div class="bonjour">
         <div class="titre-bonjour">Bonjour ${p.prenom || ''}</div>
         <div>${badgePromo(p)}</div>

@@ -97,11 +97,11 @@ code { background: var(--gris); padding: 1px 5px; border-radius: 5px; font-size:
 .aide { font-size: 13px; color: var(--encre-2); }
 
 /* ---------- Éléments ---------- */
-.logo {
-  width: 40px; height: 40px; border-radius: 10px; background: var(--encre); color: #fff; flex: none;
-  display: inline-flex; align-items: center; justify-content: center; font: 700 15px var(--titres); letter-spacing: -0.02em;
-}
-.logo.grand { width: 52px; height: 52px; font-size: 19px; border-radius: 13px; }
+.logo { width: 64px; flex: none; display: block; }
+.logo-mdepi, .logo-symbole { display: block; line-height: 0; }
+.logo-mdepi svg, .logo-symbole svg { display: block; width: 100%; height: auto; }
+.nav-marque .logo-mdepi { width: 150px; }
+.connexion-marque .logo-mdepi { width: 210px; max-width: 70%; }
 .badge-promo { background: var(--accent); color: #fff; font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 999px; letter-spacing: 0.02em; white-space: nowrap; }
 .badge-promo.noir { background: var(--encre); }
 .btn-icone {
@@ -159,8 +159,6 @@ div.cases { display: flex; flex-direction: column; gap: 6px; }
 .connexion { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px 16px; }
 .connexion-carte { width: 100%; max-width: 400px; display: flex; flex-direction: column; gap: 22px; }
 .connexion-marque { display: flex; align-items: center; gap: 14px; }
-.titre-app { font: 700 26px var(--titres); letter-spacing: -0.02em; }
-.sous-titre { color: var(--encre-2); font-size: 14px; }
 .connexion h1 { font: 600 22px var(--titres); }
 .demo-encart { background: var(--carte); border: 1px dashed #bdbdb8; border-radius: 14px; padding: 12px; font-size: 13px; display: flex; flex-direction: column; gap: 8px; }
 .demo-comptes { display: flex; flex-wrap: wrap; gap: 6px; }

@@ -3,6 +3,7 @@ import './styles.css';
 import { creerBackend } from './data/index.js';
 import { html } from './lib/html.js';
 import { icones } from './lib/icones.js';
+import { logoComplet } from './lib/logo.js';
 import { couleurPromo } from './lib/promos.js';
 import { estEquipe } from './lib/acces.js';
 import { vueConnexion } from './views/connexion.js';
@@ -79,7 +80,7 @@ function navigation(app, actif) {
   const lien = (cle, libelle, icone) => html`<a href="#/${cle}" class="nav-lien${actif === cle ? ' actif' : ''}" ${actif === cle ? html`aria-current="page"` : ''}>
       ${icone(22)}<span>${libelle}</span></a>`;
   return html`<nav class="nav" aria-label="Navigation principale">
-    <div class="nav-marque"><span class="logo">MD</span><span>MDEPi</span></div>
+    <div class="nav-marque">${logoComplet()}</div>
     ${ONGLETS.map(([c, l, i]) => lien(c, l, i))}
     <div class="nav-bas">
       ${equipe ? lien('admin', 'Back-office', icones.outils) : ''}
