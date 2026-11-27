@@ -3,7 +3,7 @@
 // commentaire de correction. Sert à l'étudiant (sa copie), à l'équipe
 // (sujet corrigé, copie d'un étudiant) et à l'impression (sauvegarde PDF).
 import { html, brut } from '../lib/html.js';
-import { points, verdict, formatNote, fatale } from '../lib/bareme.js';
+import { points, verdict, formatNote, fatale, pointsPonderes, nbAttendues } from '../lib/bareme.js';
 import { lettre, htmlQcm, LIBELLES_TYPES } from '../lib/qcm.js';
 import { corrigerQroc } from '../lib/qroc.js';
 
@@ -36,17 +36,21 @@ function choixMarque(q, c, p) {
 // editable : sujet corrigé du back-office, où l'on marque les propositions.
 export function questionCorrigee(q, num, correction, reponse, avecCopie, editable = false) {
   const c = correction || { bonnes: [], reponses_qroc: [], explications: {}, commentaire: '' };
-  const pts = avecCopie ? points(q, c, reponse) : null;
-  const qroc = avecCopie && q.type === 'QROC' ? corrigerQroc(reponse?.texte, c.reponses_qroc, c.refusees_qroc) : null;
+  const brutes = avecCopie ? points(q, c, reponse) : null;
+  const coef = Number(q.coefficient) || 1;
+  const pts = avecCopie ? pointsPonderes(q, c, reponse) : null;
+  const qroc = avecCopie && q.type === 'QROC' ? corrigerQroc(reponse?.texte, c.reponses_qroc, c.refusees_qroc, c.partielles_qroc) : null;
   const corps =
     q.type === 'QROC'
       ? html`<div class="qroc-corr">
           ${avecCopie
-            ? html`<div class="qroc-votre ${pts ? 'v-juste' : 'v-fausse'}"><span class="aide">Votre réponse</span><strong>${reponse?.texte || '(pas de réponse)'}</strong>
+            ? html`<div class="qroc-votre ${brutes === 1 ? 'v-juste' : brutes > 0 ? 'v-partielle' : 'v-fausse'}"><span class="aide">Votre réponse</span><strong>${reponse?.texte || '(pas de réponse)'}</strong>
                 ${qroc?.mode === 'approche' ? html`<span class="aide">Acceptée : proche de « ${qroc.acceptee} »</span>` : ''}
+                ${qroc?.mode === 'partielle' ? html`<span class="aide">Réponse jugée acceptable par l'équipe : 0,5 point</span>` : ''}
                 ${qroc?.mode === 'refusee' ? html`<span class="aide">Réponse refusée par l'équipe</span>` : ''}</div>`
             : ''}
-          <div><span class="aide">Réponses acceptées</span><ul class="liste-acceptees">${(c.reponses_qroc || []).map((r) => html`<li>${r}</li>`)}</ul></div>
+          <div><span class="aide">Réponses acceptées</span><ul class="liste-acceptees">${(c.reponses_qroc || []).map((r) => html`<li>${r}</li>`)}</ul>
+            ${(c.partielles_qroc || []).length ? html`<span class="aide">Acceptables (0,5 point)</span><ul class="liste-acceptees">${c.partielles_qroc.map((r) => html`<li>${r}</li>`)}</ul>` : ''}</div>
         </div>`
       : html`<div class="tableau-defile"><table class="table-corr">
           <thead><tr><th></th><th>Réponse attendue</th>${avecCopie ? html`<th>Votre réponse</th>` : ''}<th class="sr">Proposition</th>${avecCopie ? html`<th class="sr">Verdict</th>` : ''}</tr></thead>
@@ -64,11 +68,15 @@ export function questionCorrigee(q, num, correction, reponse, avecCopie, editabl
 
   return html`<article class="q-corr">
     <header class="q-bandeau">
-      <span>Question ${num} · Pondération 1</span>
-      <span>${LIBELLES_TYPES[q.type]}</span>
+      <span>Question ${num} · Pondération ${coef}</span>
+      <span>${LIBELLES_TYPES[q.type]}${q.type === 'QRP' ? ` · ${nbAttendues(q, c)} réponses attendues` : ''}</span>
     </header>
     <div class="q-corps">
-      ${avecCopie ? html`<p class="q-points ${pts === 1 ? 'plein' : pts > 0 ? 'partiel' : 'nul'}">${formatNote(pts)} / 1 point${reponse?.validee === false ? ' · réponse non validée' : ''}${q.type !== 'QROC' && reponse?.choix?.length && fatale(c, reponse.choix) ? ' · proposition indispensable oubliée ou inacceptable cochée' : ''}</p>` : ''}
+      ${q.statut === 'annulee' ? html`<p class="alerte rouge">Question annulée : elle ne compte pas dans la note.</p>` : ''}
+      ${q.statut === 'neutralisee' ? html`<p class="alerte">Question neutralisée : tous les candidats ont les points.</p>` : ''}
+      ${avecCopie && q.statut !== 'annulee'
+        ? html`<p class="q-points ${pts === coef ? 'plein' : pts > 0 ? 'partiel' : 'nul'}">${formatNote(Math.round(pts * 100) / 100)} / ${coef} point${coef > 1 ? 's' : ''}${reponse?.validee === false ? ' · réponse non validée' : ''}${q.type !== 'QROC' && reponse?.choix?.length && fatale(c, reponse.choix) ? ' · proposition indispensable oubliée ou inacceptable cochée' : ''}${q.type === 'QRP' && (reponse?.choix?.length || 0) > nbAttendues(q, c) ? ' · plus de cases cochées que de réponses attendues' : ''}</p>`
+        : ''}
       <div class="q-enonce">${brut(htmlQcm(q.enonce))}</div>
       ${corps}
       ${c.commentaire ? html`<div class="q-commentaire"><strong>Commentaire de correction de la question</strong>${brut(htmlQcm(c.commentaire))}</div>` : ''}
@@ -82,9 +90,29 @@ export function qcmCorrige(qcm, corrections, reponses, editable = false) {
   return qcm.map(
     (d) => html`<section class="dossier-corr">
       <h2 class="titre-dossier">${d.titre}</h2>
-      ${d.questions.map((q, i) => questionCorrigee(q, i + 1, corrections[q.id], reponses?.[q.id], avecCopie, editable))}
+      ${d.questions.map((q, i) => html`${editable ? reglagesQuestion(q, corrections[q.id]) : ''}${questionCorrigee(q, i + 1, corrections[q.id], reponses?.[q.id], avecCopie, editable)}`)}
     </section>`
   );
+}
+
+// Back-office : type (QRM / QRP), réponses attendues, pondération, statut.
+function reglagesQuestion(q, c) {
+  const choix = q.type === 'QRM' || q.type === 'QRP';
+  return html`<div class="reglages-question no-print" data-reglages="${q.id}">
+    ${choix
+      ? html`<label class="champ-mini"><span>Type</span><select data-champ="type">
+          <option value="QRM" ${q.type === 'QRM' ? 'selected' : ''}>QRM</option>
+          <option value="QRP" ${q.type === 'QRP' ? 'selected' : ''}>QRP (réponses précisées)</option>
+        </select></label>
+        ${q.type === 'QRP' ? html`<label class="champ-mini"><span>Réponses attendues</span><input type="number" min="1" max="${q.propositions.length}" data-champ="nb_reponses" value="${nbAttendues(q, c)}"></label>` : ''}`
+      : ''}
+    <label class="champ-mini"><span>Pondération</span><input type="number" min="1" max="20" step="1" data-champ="coefficient" value="${Number(q.coefficient) || 1}"></label>
+    <label class="champ-mini"><span>Après l'épreuve</span><select data-champ="statut">
+      <option value="normale" ${!q.statut || q.statut === 'normale' ? 'selected' : ''}>Comptée normalement</option>
+      <option value="neutralisee" ${q.statut === 'neutralisee' ? 'selected' : ''}>Neutralisée (points pour tous)</option>
+      <option value="annulee" ${q.statut === 'annulee' ? 'selected' : ''}>Annulée (retirée de la note)</option>
+    </select></label>
+  </div>`;
 }
 
 // Bandeau de note : note /20, points, moyenne, rang.

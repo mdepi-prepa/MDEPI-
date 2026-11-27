@@ -2,10 +2,11 @@
 // gardées dans le navigateur. Sert à essayer l'app sans base de données
 // (préview, développement). Code de connexion : 123456.
 import { peutVoirSeance, peutVoirAnnonce, estAdmin, estEquipe } from '../lib/acces.js';
-import { serieDe, noterCopie, imagesUtilisees, renommerImages } from '../lib/qcm.js';
+import { serieDe, noterCopie, imagesUtilisees, renommerImages, qrocACorriger } from '../lib/qcm.js';
+import { corrigerQroc } from '../lib/qroc.js';
 import { QCM_DEMO } from './demo-qcm.js';
 
-const CLE = 'mdepi-demo-v5';
+const CLE = 'mdepi-demo-v6';
 export const CODE_DEMO = '123456';
 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2));
@@ -71,6 +72,8 @@ function donneesInitiales() {
     modifiee_le: null,
     serie: null,
     correction_publiee: false,
+    publication: 'cloture',
+    publication_le: null,
     ...extra,
   });
   const seances = [
@@ -159,6 +162,17 @@ function donneesInitiales() {
   };
   semer(par('CCB n°2'), -10, 7);
   semer(partielA, -2, 3);
+  // CCB n°2 : QROC déjà corrigées par l'équipe (réponses proches confirmées,
+  // les autres refusées). Le partiel blanc garde des réponses à corriger.
+  for (const q of qcm.questions.filter((x) => x.serie_id === par('CCB n°2').id && x.type === 'QROC')) {
+    const c = qcm.corrections[q.id];
+    for (const cp of qcm.copies) {
+      const t = cp.reponses[q.id]?.texte;
+      const m = t && corrigerQroc(t, c.reponses_qroc, c.refusees_qroc, c.partielles_qroc).mode;
+      if (m === 'approche') c.reponses_qroc.push(t);
+      if (m === 'faux') c.refusees_qroc.push(t);
+    }
+  }
 
   return { groupes, inscrits, seances, documents, annonces, lues: {}, session: null, entrainements: [], ...qcm };
 }
@@ -174,8 +188,8 @@ function importer(db, serie, dossiers) {
     db.dossiers.push(dossier);
     d.questions.forEach((q, qi) => {
       const id = uid();
-      db.questions.push({ id, serie_id: serie, dossier_id: dossier.id, qti_id: q.qti_id, ordre: di * 1000 + qi, type: q.type, enonce: q.enonce, propositions: q.propositions });
-      db.corrections[id] = { question_id: id, ...q.correction };
+      db.questions.push({ id, serie_id: serie, dossier_id: dossier.id, qti_id: q.qti_id, ordre: di * 1000 + qi, type: q.type, enonce: q.enonce, propositions: q.propositions, nb_reponses: q.nb_reponses || null, coefficient: q.coefficient || 1, statut: 'normale' });
+      db.corrections[id] = { question_id: id, refusees_qroc: [], partielles_qroc: [], indispensables: [], inacceptables: [], ...q.correction };
     });
   });
 }
@@ -215,7 +229,14 @@ export function creerBackendDemo() {
   const voirSujet = (serie) => serieVisible(serie, (x) => new Date(x.debut) <= new Date());
   // Même règle que peut_voir_correction (schema.sql) : dès la fin de sa propre séance, ou publication anticipée.
   const groupesRestants = (serie) => db.seances.filter((x) => serieDe(x) === serie && !x.annulee && new Date(x.fin) > new Date()).length;
-  const voirCorrection = (serie) => serieVisible(serie, (x) => !x.annulee && (x.correction_publiee || new Date(x.fin) <= new Date()));
+  // Même règle que resultats_publies (schema.sql) : jamais, dès la fin, ou à partir d'une date.
+  const finie = (x) => new Date() > new Date(new Date(x.fin).getTime() + 2 * 60000);
+  const publies = (x) => finie(x) && ((x.publication || 'cloture') === 'cloture' || (x.publication === 'date' && !!x.publication_le && new Date() >= new Date(x.publication_le)));
+  const voirCorrection = (serie) => serieVisible(serie, (x) => !x.annulee && (x.correction_publiee || publies(x)));
+  const qrocEnAttente = (serie) => {
+    const ids = new Set(db.seances.filter((x) => serieDe(x) === serie).map((x) => x.id));
+    return qrocACorriger(db.questions.filter((q) => q.serie_id === serie), db.corrections, db.copies.filter((c) => ids.has(c.seance_id)).map((c) => ({ reponses: Object.values(c.reponses) })));
+  };
   // Même règle que question_accessible (schema.sql) : dossier progressif.
   const questionAccessible = (q) => {
     if (estEquipe(profil()) || voirCorrection(q.serie_id)) return true;
@@ -328,6 +349,10 @@ export function creerBackendDemo() {
         dossiers: db.dossiers.filter((d) => d.serie_id === serie).length,
         correction_visible: voirCorrection(serie),
         groupes_restants: groupesRestants(serie),
+        resultats_publies: publies(s),
+        publication: s.publication || 'cloture',
+        publication_le: s.publication_le || null,
+        qroc_en_cours: finie(s) && qrocEnAttente(serie) > 0,
       };
     },
     async corrections(seanceId) {
@@ -371,6 +396,17 @@ export function creerBackendDemo() {
       Object.assign(db.corrections[questionId], champs);
       sauver();
     },
+    async modifierQuestion(questionId, champs) {
+      exiger(estEquipe);
+      Object.assign(db.questions.find((q) => q.id === questionId), champs);
+      sauver();
+    },
+    async choisirPublication(seanceId, publication, publicationLe) {
+      exiger(estEquipe);
+      const s = await this.seance(seanceId);
+      db.seances.filter((x) => serieDe(x) === serieDe(s)).forEach((x) => Object.assign(x, { publication, publication_le: publication === 'date' ? publicationLe : null }));
+      sauver();
+    },
     async publierCorrection(seanceId, publiee) {
       exiger(estEquipe);
       const s = await this.seance(seanceId);
@@ -405,6 +441,7 @@ export function creerBackendDemo() {
       if (!q) throw new Error('Question introuvable.');
       if ((choix || []).some((id) => !q.propositions.some((p) => p.id === id))) throw new Error('Proposition inconnue.');
       if (!questionAccessible(q)) throw new Error('Question pas encore accessible.');
+      if (q.type === 'QRP' && (choix || []).length > (q.nb_reponses || 99)) throw new Error(`Trop de cases cochées : ${q.nb_reponses} réponses attendues.`);
       if (c.reponses[questionId]?.validee) throw new Error('Question déjà validée.');
       c.reponses[questionId] = { question_id: questionId, choix: choix || [], texte: (texte || '').slice(0, 500), validee: !!valider, modifiee_le: new Date().toISOString() };
       sauver();
@@ -416,7 +453,7 @@ export function creerBackendDemo() {
     },
     async monResultat(seanceId) {
       const s = await this.seance(seanceId);
-      if (!s || new Date() < new Date(s.fin)) return null;
+      if (!s || !publies(s) || qrocEnAttente(serieDe(s)) > 0) return null;
       const notes = notesSerie(serieDe(s), true);
       const moi = notes.find((n) => n.seance_id === seanceId && n.user_id === db.session);
       if (!moi) return null;

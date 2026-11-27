@@ -82,7 +82,7 @@ export function creerBackendSupabase(url, cleAnon) {
     },
     async infosQcm(seanceId) {
       const [r] = verifier(await sb.rpc('infos_qcm', { p_seance: seanceId }));
-      return r || { questions: 0, dossiers: 0, correction_visible: false, groupes_restants: 0 };
+      return r || { questions: 0, dossiers: 0, correction_visible: false, groupes_restants: 0, resultats_publies: false, publication: 'cloture', publication_le: null, qroc_en_cours: false };
     },
     // Bonnes réponses : visibles par l'équipe, et par les étudiants une fois la correction publiée.
     async corrections(seanceId) {
@@ -121,7 +121,7 @@ export function creerBackendSupabase(url, cleAnon) {
         );
         const qs = verifier(
           await sb.from('questions').insert(
-            d.questions.map((q, qi) => ({ serie_id: serie, dossier_id: enreg.id, qti_id: q.qti_id, ordre: di * 1000 + qi, type: q.type, enonce: q.enonce, propositions: q.propositions }))
+            d.questions.map((q, qi) => ({ serie_id: serie, dossier_id: enreg.id, qti_id: q.qti_id, ordre: di * 1000 + qi, type: q.type, enonce: q.enonce, propositions: q.propositions, nb_reponses: q.nb_reponses || null, coefficient: q.coefficient || 1 }))
           ).select('id, qti_id')
         );
         verifier(
@@ -136,6 +136,15 @@ export function creerBackendSupabase(url, cleAnon) {
     },
     async modifierCorrection(questionId, champs) {
       verifier(await sb.from('corrections').update(champs).eq('question_id', questionId));
+    },
+    // Type (QRM/QRP), nombre de réponses attendues, coefficient, statut (neutralisée, annulée).
+    async modifierQuestion(questionId, champs) {
+      verifier(await sb.from('questions').update(champs).eq('id', questionId));
+    },
+    // Publication des résultats pour toute la série : 'jamais' | 'cloture' | 'date'.
+    async choisirPublication(seanceId, publication, publicationLe) {
+      const ids = (await this.seancesSerie(seanceId)).map((x) => x.id);
+      verifier(await sb.from('seances').update({ publication, publication_le: publication === 'date' ? publicationLe : null }).in('id', ids));
     },
     async publierCorrection(seanceId, publiee) {
       const ids = (await this.seancesSerie(seanceId)).map((x) => x.id);

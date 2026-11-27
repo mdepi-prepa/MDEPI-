@@ -396,5 +396,14 @@ body.mode-epreuve #contenu > .passage { max-width: 1100px; margin: 0 auto; }
 .marque-fatale.indisp { background: var(--juste-fond); color: var(--juste); }
 .marque-fatale.inacc { background: var(--faux-fond); color: var(--faux); }
 .choix-marque { display: block; margin-top: 6px; }
-.choix-marque select { width: auto; max-width: 100%; font: inherit; font-size: 13px; padding: 3px 6px; border: 1px solid var(--bord); border-radius: 6px; background: var(--fond, #fff); color: inherit; }
+.choix-marque select { width: auto; max-width: 100%; font: inherit; font-size: 13px; padding: 3px 6px; border: 1px solid var(--bord); border-radius: 6px; background: var(--carte); color: inherit; }
 @media print { .marque-fatale { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+
+/* Barème : réglages par question (back-office), QROC à 0,5, publication */
+.reglages-question { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: flex-end; margin: 18px 0 6px; padding: 10px 12px; border: 1px dashed var(--bord); border-radius: 10px; }
+.champ-mini { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 500; color: var(--encre-2); }
+.champ-mini input { width: 80px; }
+.champ-mini select, .champ-mini input { font: inherit; font-size: 14px; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--bord); background: var(--carte); color: inherit; }
+.radio { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 14px; }
+.radio input[type=datetime-local] { font: inherit; font-size: 14px; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--bord); }
+.v-partielle { background: var(--orange-fond); color: var(--orange); }

@@ -279,6 +279,12 @@ create policy documents_fichiers_equipe on storage.objects for all to authentica
 -- serie = id de la séance d'origine (null pour la séance d'origine elle-même).
 alter table public.seances add column if not exists serie uuid references public.seances(id) on delete set null;
 alter table public.seances add column if not exists correction_publiee boolean not null default false;
+-- Publication des résultats (comme Théia) : « jamais » (pas affichés aux
+-- étudiants), « cloture » (dès la fin de l'épreuve), « date » (à partir de publication_le).
+alter table public.seances add column if not exists publication text not null default 'cloture';
+alter table public.seances add column if not exists publication_le timestamptz;
+alter table public.seances drop constraint if exists seances_publication_check;
+alter table public.seances add constraint seances_publication_check check (publication in ('jamais', 'cloture', 'date'));
 
 create or replace function public.serie_de(s public.seances)
 returns uuid language sql immutable as $$ select coalesce(s.serie, s.id) $$;
@@ -306,6 +312,17 @@ create table if not exists public.questions (
   unique (serie_id, qti_id)
 );
 
+-- QRP (réponses précisées) : nb_reponses = n, nombre de cases cochables.
+-- coefficient : pondération de la question (Théia). statut : « neutralisee »
+-- (tous les candidats ont les points) ou « annulee » (retirée de la note).
+alter table public.questions drop constraint if exists questions_type_check;
+alter table public.questions add constraint questions_type_check check (type in ('QRU','QRM','QRP','QROC'));
+alter table public.questions add column if not exists nb_reponses integer check (nb_reponses > 0);
+alter table public.questions add column if not exists coefficient integer not null default 1 check (coefficient > 0);
+alter table public.questions add column if not exists statut text not null default 'normale';
+alter table public.questions drop constraint if exists questions_statut_check;
+alter table public.questions add constraint questions_statut_check check (statut in ('normale', 'neutralisee', 'annulee'));
+
 create table if not exists public.corrections (
   question_id uuid primary key references public.questions(id) on delete cascade,
   bonnes text[] not null default '{}',          -- id des propositions justes (QRU/QRM)
@@ -319,6 +336,8 @@ create table if not exists public.corrections (
 -- cochée, ou une inacceptable (fausse) cochée, met 0 à la question.
 alter table public.corrections add column if not exists indispensables text[] not null default '{}';
 alter table public.corrections add column if not exists inacceptables text[] not null default '{}';
+-- QROC : réponses jugées « acceptables » par l'équipe (0,5 point).
+alter table public.corrections add column if not exists partielles_qroc text[] not null default '{}';
 
 create table if not exists public.copies (
   id uuid primary key default gen_random_uuid(),
@@ -372,15 +391,26 @@ returns boolean language sql stable security definer set search_path = public as
     where public.serie_de(s) = p_serie and public.peut_voir_seance(s) and now() >= s.debut)
 $$;
 
--- Copie corrigée (bonnes réponses) : visible par chaque étudiant dès la fin de
--- SA séance (son groupe a composé, délai de grâce compris), ou plus tôt si l'équipe la publie. Un groupe
--- qui n'a pas encore composé ne la voit pas dans l'app.
+-- Résultats publiés pour cette séance, selon le choix de l'équipe : jamais,
+-- dès la fin de l'épreuve (délai de grâce compris), ou à partir d'une date.
+create or replace function public.resultats_publies(s public.seances)
+returns boolean language sql stable as $$
+  select public.epreuve_finie(s) and case s.publication
+    when 'cloture' then true
+    when 'date' then s.publication_le is not null and now() >= s.publication_le
+    else false end
+$$;
+
+-- Copie corrigée (bonnes réponses) : visible par chaque étudiant dès que les
+-- résultats de SA séance sont publiés (par défaut dès la fin de son épreuve,
+-- délai de grâce compris), ou plus tôt si l'équipe la publie. Un groupe qui
+-- n'a pas encore composé ne la voit pas dans l'app.
 create or replace function public.peut_voir_correction(p_serie uuid)
 returns boolean language sql stable security definer set search_path = public as $$
   select public.est_equipe() or exists (
     select 1 from public.seances s
     where public.serie_de(s) = p_serie and public.peut_voir_seance(s) and not s.annulee
-      and (s.correction_publiee or public.epreuve_finie(s)))
+      and (s.correction_publiee or public.resultats_publies(s)))
 $$;
 
 create or replace function public.question_accessible(q public.questions)
@@ -410,9 +440,12 @@ $$;
 -- une QRM sans aucune case cochée vaut 0 (décision de l'équipe, 27/11/2026).
 -- QRU et QRM : une proposition indispensable non cochée ou une inacceptable
 -- cochée met 0 à la question (comme Théia).
--- QRU : 1 si la bonne réponse seule est cochée. QROC : 1 si la réponse correspond
+-- QRU : 1 si la bonne réponse seule est cochée. QRP : n réponses attendues,
+-- bonnes cochées ÷ n (plus de n cases = 0). QROC : 1 si la réponse correspond
 -- à une réponse acceptée (correction automatique tolérante, voir qroc_juste) et
--- n'a pas été refusée par l'équipe.
+-- n'a pas été refusée par l'équipe ; 0,5 si l'équipe l'a jugée « acceptable ».
+-- Note : chaque question compte pour son coefficient ; neutralisée = tous les
+-- points ; annulée = retirée de la note (voir note_copie).
 -- Même calcul en JavaScript dans src/lib/bareme.js : les garder identiques.
 create or replace function public.normaliser(t text)
 returns text language sql immutable as $$
@@ -505,18 +538,46 @@ begin
 end;
 $$;
 
+-- État de la correction d'une réponse de QROC (même logique que corrigerQroc
+-- dans qroc.js) : vide, refusee, partielle, exact, approche (acceptée car
+-- proche, à confirmer) ou faux (aucune réponse acceptée ne correspond).
+create or replace function public.qroc_etat(p_texte text, p_acceptees text[], p_refusees text[], p_partielles text[])
+returns text language plpgsql immutable as $$
+declare t text := public.cle_qroc(p_texte); tri text;
+begin
+  if t = '' then return 'vide'; end if;
+  if exists (select 1 from unnest(coalesce(p_refusees, '{}')) r where public.cle_qroc(r) = t) then return 'refusee'; end if;
+  if exists (select 1 from unnest(coalesce(p_partielles, '{}')) r where public.cle_qroc(r) = t) then return 'partielle'; end if;
+  tri := array_to_string(array(select x from unnest(string_to_array(t, ' ')) x order by x collate "C"), ' ');
+  if exists (select 1 from unnest(coalesce(p_acceptees, '{}')) a, public.cle_qroc(a) k
+             where k <> '' and (k = t or array_to_string(array(select x from unnest(string_to_array(k, ' ')) x order by x collate "C"), ' ') = tri)) then
+    return 'exact';
+  end if;
+  if public.qroc_juste(p_texte, p_acceptees, p_refusees) then return 'approche'; end if;
+  return 'faux';
+end;
+$$;
+
 drop function if exists public.points(text, jsonb, text[], text[], text[], text, text[]);
+drop function if exists public.points(text, jsonb, text[], text[], text[], text, text[], text[], text[]);
 create or replace function public.points(p_type text, p_propositions jsonb, p_bonnes text[], p_qroc text[], p_choix text[], p_texte text,
-                                         p_refus text[] default '{}', p_indispensables text[] default '{}', p_inacceptables text[] default '{}')
+                                         p_refus text[] default '{}', p_indispensables text[] default '{}', p_inacceptables text[] default '{}',
+                                         p_partielles text[] default '{}', p_nb integer default null)
 returns numeric language plpgsql immutable as $$
-declare d integer;
+declare d integer; n integer;
 begin
   if p_type = 'QROC' then
-    return case when public.qroc_juste(p_texte, p_qroc, p_refus) then 1 else 0 end;
+    return case public.qroc_etat(p_texte, p_qroc, p_refus, p_partielles)
+      when 'exact' then 1 when 'approche' then 1 when 'partielle' then 0.5 else 0 end;
   end if;
   if cardinality(coalesce(p_choix, '{}')) = 0 then return 0; end if;
   -- Indispensable oubliée ou inacceptable cochée : 0 à la question.
   if not (coalesce(p_indispensables, '{}') <@ p_choix) or coalesce(p_inacceptables, '{}') && p_choix then return 0; end if;
+  if p_type = 'QRP' then
+    n := coalesce(p_nb, nullif(cardinality(coalesce(p_bonnes, '{}')), 0), 1);
+    if cardinality(p_choix) > n then return 0; end if;
+    return (select count(*) from unnest(p_choix) x where x = any (coalesce(p_bonnes, '{}')))::numeric / n;
+  end if;
   select count(*) into d from jsonb_array_elements(p_propositions) p
    where ((p->>'id') = any (coalesce(p_choix, '{}'))) <> ((p->>'id') = any (p_bonnes));
   if p_type = 'QRU' then return case when d = 0 then 1 else 0 end; end if;
@@ -524,18 +585,42 @@ begin
 end;
 $$;
 
--- Note d'une copie : points, total, note sur 20.
+-- Note d'une copie : points (pondérés), total (somme des coefficients des
+-- questions non annulées), note sur 20.
 create or replace function public.note_copie(p_copie uuid)
 returns table (points numeric, total integer, note20 numeric)
 language sql stable security definer set search_path = public as $$
-  with c as (select c.*, public.serie_de(s) as serie from public.copies c join public.seances s on s.id = c.seance_id where c.id = p_copie)
-  select coalesce(sum(public.points(q.type, q.propositions, k.bonnes, k.reponses_qroc, r.choix, r.texte, k.refusees_qroc, k.indispensables, k.inacceptables)), 0),
-         count(q.id)::integer,
-         case when count(q.id) = 0 then 0 else round(20 * coalesce(sum(public.points(q.type, q.propositions, k.bonnes, k.reponses_qroc, r.choix, r.texte, k.refusees_qroc, k.indispensables, k.inacceptables)), 0) / count(q.id), 2) end
-  from c join public.questions q on q.serie_id = c.serie
-  join public.corrections k on k.question_id = q.id
-  left join public.reponses r on r.copie_id = c.id and r.question_id = q.id
+  with c as (select c.*, public.serie_de(s) as serie from public.copies c join public.seances s on s.id = c.seance_id where c.id = p_copie),
+  p as (
+    select case q.statut
+             when 'annulee' then 0
+             when 'neutralisee' then q.coefficient
+             else q.coefficient * public.points(q.type, q.propositions, k.bonnes, k.reponses_qroc, r.choix, r.texte, k.refusees_qroc,
+                                                k.indispensables, k.inacceptables, k.partielles_qroc, q.nb_reponses) end as pts,
+           case when q.statut = 'annulee' then 0 else q.coefficient end as coef
+    from c join public.questions q on q.serie_id = c.serie
+    join public.corrections k on k.question_id = q.id
+    left join public.reponses r on r.copie_id = c.id and r.question_id = q.id)
+  select round(coalesce(sum(pts), 0), 2),
+         coalesce(sum(coef), 0)::integer,
+         case when coalesce(sum(coef), 0) = 0 then 0 else round(20 * coalesce(sum(pts), 0) / sum(coef), 2) end
+  from p
 $$;
+
+-- Réponses de QROC pas encore corrigées par l'équipe dans une série :
+-- groupes de réponses (même réponse à la mise en forme près) ni reconnues
+-- exactement, ni refusées, ni jugées acceptables. Tant qu'il en reste, la
+-- note et le rang ne sont pas montrés aux étudiants (comme Théia : statut « en cours »).
+create or replace function public.qroc_a_corriger(p_serie uuid)
+returns integer language sql stable security definer set search_path = public as $$
+  select count(distinct (q.id, public.cle_qroc(r.texte)))::integer
+  from public.questions q
+  join public.corrections k on k.question_id = q.id
+  join public.reponses r on r.question_id = q.id
+  where q.serie_id = p_serie and q.type = 'QROC' and q.statut = 'normale'
+    and public.qroc_etat(r.texte, k.reponses_qroc, k.refusees_qroc, k.partielles_qroc) in ('approche', 'faux')
+$$;
+revoke execute on function public.qroc_a_corriger(uuid) from public, anon;
 
 -- Note d'une copie quelconque : appelée seulement par les fonctions ci-dessous
 -- (mon_resultat, resultats_epreuve), jamais directement depuis l'app.
@@ -543,13 +628,19 @@ revoke execute on function public.note_copie(uuid) from public, anon, authentica
 
 -- Nombre de questions et de dossiers d'une épreuve (visible avant l'ouverture,
 -- sans dévoiler le sujet).
+-- resultats_publies : la note est publiée pour cette séance (choix de
+-- l'équipe) ; qroc_en_cours : des réponses de QROC restent à corriger.
+drop function if exists public.infos_qcm(uuid);
 create or replace function public.infos_qcm(p_seance uuid)
-returns table (questions integer, dossiers integer, correction_visible boolean, groupes_restants integer)
+returns table (questions integer, dossiers integer, correction_visible boolean, groupes_restants integer,
+               resultats_publies boolean, publication text, publication_le timestamptz, qroc_en_cours boolean)
 language sql stable security definer set search_path = public as $$
   select (select count(*)::integer from public.questions q where q.serie_id = public.serie_de(s)),
          (select count(*)::integer from public.dossiers d where d.serie_id = public.serie_de(s)),
          public.peut_voir_correction(public.serie_de(s)),
-         (select count(*)::integer from public.seances x where public.serie_de(x) = public.serie_de(s) and not x.annulee and not public.epreuve_finie(x))
+         (select count(*)::integer from public.seances x where public.serie_de(x) = public.serie_de(s) and not x.annulee and not public.epreuve_finie(x)),
+         public.resultats_publies(s), s.publication, s.publication_le,
+         public.epreuve_finie(s) and public.qroc_a_corriger(public.serie_de(s)) > 0
   from public.seances s where s.id = p_seance and public.peut_voir_seance(s)
 $$;
 
@@ -585,6 +676,9 @@ begin
       select 1 from jsonb_array_elements(q.propositions) p where p->>'id' = x)) then
     raise exception 'Proposition inconnue';
   end if;
+  if q.type = 'QRP' and cardinality(coalesce(p_choix, '{}')) > coalesce(q.nb_reponses, 99) then
+    raise exception 'Trop de cases cochées : % réponses attendues', q.nb_reponses;
+  end if;
   select validee into deja from public.reponses where copie_id = c.id and question_id = q.id;
   if deja then raise exception 'Question déjà validée'; end if;
   insert into public.reponses (copie_id, question_id, choix, texte, validee, modifiee_le)
@@ -599,7 +693,8 @@ returns void language sql security definer set search_path = public as $$
   update public.copies set rendue_le = now() where seance_id = p_seance and user_id = auth.uid() and rendue_le is null
 $$;
 
--- Mon résultat, dès la fin de mon épreuve : note, moyenne et rang parmi les
+-- Mon résultat, dès que les résultats de mon épreuve sont publiés (par défaut
+-- à sa fin) et que les QROC sont corrigées : note, moyenne et rang parmi les
 -- copies des groupes qui ont déjà fini. Quand un autre groupe passe l'épreuve,
 -- ses copies s'ajoutent au classement (les premiers résultats restent).
 create or replace function public.mon_resultat(p_seance uuid)
@@ -609,7 +704,8 @@ language plpgsql stable security definer set search_path = public as $$
 declare s public.seances; ma uuid;
 begin
   select * into s from public.seances where id = p_seance;
-  if not found or not public.peut_voir_seance(s) or not public.epreuve_finie(s) then return; end if;
+  if not found or not public.peut_voir_seance(s) or not public.resultats_publies(s) then return; end if;
+  if public.qroc_a_corriger(public.serie_de(s)) > 0 then return; end if;
   select id into ma from public.copies where seance_id = p_seance and user_id = auth.uid();
   if ma is null then return; end if;
   return query
@@ -711,7 +807,7 @@ returns boolean language sql stable security definer set search_path = public as
   select public.est_equipe() or exists (
     select 1 from public.seances s
     where s.id = p_seance and public.peut_voir_seance(s)
-      and (p_type = 'support' or not s.epreuve or s.correction_publiee or public.epreuve_finie(s)
+      and (p_type = 'support' or not s.epreuve or s.correction_publiee or public.resultats_publies(s)
            or (p_type = 'sujet' and now() >= s.debut)))
 $$;
 drop policy if exists documents_lecture on public.documents;
