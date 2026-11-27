@@ -141,7 +141,7 @@ export async function vueAdminSaisie(app, { id }) {
             <label class="champ"><span>Type</span><select name="type">${Object.entries(LIBELLES_TYPES).map(
               ([k, v]) => html`<option value="${k}" ${type === k ? 'selected' : ''}>${k} · ${v.replace(/^Question à /, '')}</option>`
             )}</select></label>
-            <label class="champ"><span>Coefficient</span><input type="number" name="coefficient" min="0" step="0.5" value="${q?.coefficient ?? 1}"></label>
+            <label class="champ"><span>Coefficient</span><input type="number" name="coefficient" min="1" step="1" value="${q?.coefficient ?? 1}"></label>
             <label class="champ" data-nb><span>Réponses attendues (QRP)</span><input type="number" name="nb_reponses" min="1" step="1" value="${q?.nb_reponses ?? ''}"></label>
           </div>
           <label class="champ"><span>Énoncé</span><textarea name="enonce" rows="6" placeholder="Une ligne vide sépare deux paragraphes.">${texte}</textarea></label>
@@ -214,9 +214,10 @@ export async function vueAdminSaisie(app, { id }) {
       const type = f.type.value;
       const texte = f.enonce.value.trim();
       if (!texte && !ouverte.images.length) return "Écrivez l'énoncé de la question.";
-      const coefficient = Number(f.coefficient.value);
-      if (!(coefficient >= 0)) return 'Coefficient invalide.';
-      const q = { type, enonce: avecImages(texte, ouverte.images), propositions: [], nb_reponses: null, coefficient: coefficient || 1 };
+      // La base n'accepte qu'un coefficient entier, 1 ou plus (vide = 1).
+      const coefficient = f.coefficient.value.trim() === '' ? 1 : Number(f.coefficient.value);
+      if (!Number.isInteger(coefficient) || coefficient < 1) return 'Coefficient invalide : un nombre entier, 1 ou plus.';
+      const q = { type, enonce: avecImages(texte, ouverte.images), propositions: [], nb_reponses: null, coefficient };
       const correction = { bonnes: [], indispensables: [], inacceptables: [], reponses_qroc: [], explications: {}, commentaire: texteVersHtml(f.commentaire.value) };
       if (type === 'QROC') {
         correction.reponses_qroc = [...new Set(f.reponses_qroc.value.split('\n').map((x) => x.trim()).filter(Boolean))];

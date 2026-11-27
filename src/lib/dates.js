@@ -14,7 +14,8 @@ const d = (x) => (x instanceof Date ? x : new Date(x));
 // « 18h30 », « 9h »
 export function heure(x) {
   const parts = fHeure.formatToParts(d(x));
-  const h = parts.find((p) => p.type === 'hour').value.replace(/^0/, '');
+  // « 09 » → « 9 », mais minuit reste « 0 » (et non une heure vide : « h25 »).
+  const h = parts.find((p) => p.type === 'hour').value.replace(/^0(?=\d)/, '');
   const m = parts.find((p) => p.type === 'minute').value;
   return m === '00' ? `${h}h` : `${h}h${m}`;
 }

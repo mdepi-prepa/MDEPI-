@@ -37,17 +37,19 @@ export const nbAttendues = (question, correction) => question.nb_reponses || (co
 
 // Points d'une question, de 0 à 1 (avant coefficient).
 export function points(question, correction, reponse) {
-  const choix = reponse?.choix || [];
+  if (!correction) return 0; // question sans correction enregistrée
+  // Chaque case ne compte qu'une fois.
+  const choix = [...new Set(reponse?.choix || [])];
   if (question.type === 'QROC') return pointsQroc(reponse?.texte, correction);
   if (!choix.length) return 0;
   if (fatale(correction, choix)) return 0;
   if (question.type === 'QRP') {
     const n = nbAttendues(question, correction);
     if (choix.length > n) return 0;
-    const b = new Set(correction.bonnes || []);
+    const b = new Set(correction?.bonnes || []);
     return choix.filter((id) => b.has(id)).length / n;
   }
-  const d = discordances(question.propositions, correction.bonnes, choix);
+  const d = discordances(question.propositions, correction?.bonnes, choix);
   if (question.type === 'QRU') return d === 0 ? 1 : 0;
   return [1, 0.5, 0.2][d] ?? 0;
 }
@@ -76,7 +78,7 @@ export function fatale(correction, choix) {
 // Verdict par proposition, pour la correction : Juste, Fausse (cochée à tort), Oubliée.
 export function verdict(proposition, correction, reponse) {
   const coche = (reponse?.choix || []).includes(proposition.id);
-  const bonne = (correction.bonnes || []).includes(proposition.id);
+  const bonne = (correction?.bonnes || []).includes(proposition.id);
   if (coche && bonne) return 'juste';
   if (coche && !bonne) return 'fausse';
   if (!coche && bonne) return 'oubliee';

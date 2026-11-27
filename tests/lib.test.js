@@ -28,6 +28,9 @@ describe('dates (heure de Paris)', () => {
   it('formate heures et dates', () => {
     expect(heure(debut)).toBe('18h30');
     expect(heure('2026-12-05T08:00:00Z')).toBe('9h');
+    // Entre minuit et 1 h : « 0h25 », pas « h25 ».
+    expect(heure('2026-12-04T23:25:00Z')).toBe('0h25');
+    expect(heure('2026-12-04T23:00:00Z')).toBe('0h');
     expect(plageHoraire(debut, fin)).toBe('18h30 – 21h30');
     expect(dateLongue(debut)).toBe('Mardi 1 décembre');
   });

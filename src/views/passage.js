@@ -13,10 +13,36 @@ import { estEquipe } from '../lib/acces.js';
 import { aPlat, lettre, htmlQcm, chargerImages, LIBELLES_TYPES } from '../lib/qcm.js';
 import { ancrerQuestion, enTete } from './commun.js';
 import { bandeauNote, qcmCorrige } from './qcm-rendu.js';
+import { fileEnvoi, erreurReseau } from '../lib/envoi.js';
 
-const HORS_LIGNE = 'Pas de connexion internet.';
-// Erreur de réseau (à réessayer), par opposition à un refus de la base.
-const erreurReseau = (err) => err.message === HORS_LIGNE || /fetch|network|injoignable/i.test(err.message);
+// Réponses en attente d'envoi : une sauvegarde par épreuve et par compte.
+const PREFIXE_COPIE = 'mdepi-copie-';
+function fileCopie(app, seanceId) {
+  return fileEnvoi(`${PREFIXE_COPIE}${seanceId}-${app.profil.id}`, (qid, r) => app.api.enregistrerReponse(seanceId, qid, r.choix, r.texte, r.valider));
+}
+
+// Nombre d'écrans d'épreuve affichés (0 ou 1, 2 un court instant quand l'écran
+// se redessine) : le mode « épreuve » de la page ne s'enlève qu'au dernier.
+let ecransOuverts = 0;
+const modeEpreuve = () => document.body.classList.toggle('mode-epreuve', ecransOuverts > 0);
+
+// À l'ouverture de l'app : les réponses restées sur l'appareil (réseau coupé,
+// app fermée pendant une épreuve) repartent sans attendre que l'étudiant
+// rouvre l'écran de l'épreuve.
+export function reprendreEnvois(app) {
+  if (!app.profil) return;
+  const fin = `-${app.profil.id}`;
+  const cles = [];
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const cle = localStorage.key(i);
+      if (cle?.startsWith(PREFIXE_COPIE) && cle.endsWith(fin)) cles.push(cle);
+    }
+  } catch {
+    return; // stockage indisponible
+  }
+  for (const cle of cles) fileCopie(app, cle.slice(PREFIXE_COPIE.length, -fin.length)).envoyer();
+}
 
 export function chrono(ms) {
   if (ms <= 0) return '0:00';
@@ -32,12 +58,16 @@ export async function vuePassage(app, { id }) {
   if (!s || !s.epreuve) {
     return { html: html`<div class="page">${enTete('Épreuve introuvable', null, '#/epreuves')}<p>Cette épreuve n'existe pas ou ne concerne pas votre groupe.</p></div>` };
   }
-  const [infos, copie] = await Promise.all([app.api.infosQcm(id), app.api.maCopie(id)]);
-  const maintenant = new Date();
-  const ouverte = !s.annulee && new Date(s.debut) <= maintenant && maintenant < new Date(s.fin);
+  const lu = Date.now();
+  const [infos, copie, decalage] = await Promise.all([app.api.infosQcm(id), app.api.maCopie(id), app.api.decalageHorloge()]);
+  // Heure du serveur : c'est lui qui ouvre et ferme l'épreuve. Une horloge
+  // d'appareil mal réglée ne doit ni couper l'épreuve trop tôt, ni laisser
+  // croire qu'il reste du temps.
+  const horloge = () => Date.now() + decalage;
+  const ouverte = !s.annulee && Date.parse(s.debut) <= horloge() && horloge() < Date.parse(s.fin);
 
-  if (copie && !copie.rendue_le && ouverte) return passage(app, s, copie);
-  return accueilEpreuve(app, s, infos, copie, ouverte);
+  if (copie && !copie.rendue_le && ouverte) return passage(app, s, copie, horloge, lu);
+  return accueilEpreuve(app, s, infos, copie, ouverte, horloge);
 }
 
 // Pourquoi la note n'est pas (encore) affichée.
@@ -55,9 +85,9 @@ function messageAttente(s, infos) {
 }
 
 // ---------- Page d'informations (avant, ou après l'épreuve) ----------
-async function accueilEpreuve(app, s, infos, copie, ouverte) {
+async function accueilEpreuve(app, s, infos, copie, ouverte, horloge) {
   const equipe = estEquipe(app.profil);
-  const avant = new Date() < new Date(s.debut);
+  const avant = horloge() < Date.parse(s.debut);
   const resultat = copie ? await app.api.monResultat(s.id).catch(() => null) : null;
 
   let etat;
@@ -76,7 +106,7 @@ async function accueilEpreuve(app, s, infos, copie, ouverte) {
         <div><dt>Fermeture</dt><dd>${dateLongue(s.fin)} à ${heure(s.fin)}</dd></div>
         <div><dt>Durée</dt><dd>${chrono(new Date(s.fin) - new Date(s.debut))}</dd></div>
         <div><dt>Questions</dt><dd>${infos.questions} question${infos.questions > 1 ? 's' : ''}${infos.dossiers ? ` · ${infos.dossiers} dossier${infos.dossiers > 1 ? 's' : ''}` : ''}</dd></div>
-        ${ouverte && !copie?.rendue_le ? html`<div><dt>Temps restant</dt><dd data-restant>${chrono(new Date(s.fin) - new Date())}</dd></div>` : ''}
+        ${ouverte && !copie?.rendue_le ? html`<div><dt>Temps restant</dt><dd data-restant>${chrono(Date.parse(s.fin) - horloge())}</dd></div>` : ''}
       </dl>
       ${etat || ''}
       ${!copie && ouverte && !equipe
@@ -113,6 +143,10 @@ async function accueilEpreuve(app, s, infos, copie, ouverte) {
   </div>`;
 
   function monter(el) {
+    // Page ouverte en avance : à l'heure d'ouverture, elle se met à jour toute
+    // seule et le bouton « Commencer » apparaît.
+    const dans = Date.parse(s.debut) - horloge();
+    if (avant && !s.annulee && dans < 12 * 3600000) setTimeout(() => document.body.contains(el) && app.rafraichir(), dans + 1000);
     el.querySelector('[data-action=commencer]')?.addEventListener('click', async (e) => {
       e.target.disabled = true;
       try {
@@ -130,30 +164,23 @@ async function accueilEpreuve(app, s, infos, copie, ouverte) {
 }
 
 // ---------- Passage ----------
-async function passage(app, s, copie) {
+async function passage(app, s, copie, horloge, lu) {
   const qcm = await app.api.qcm(s.id);
   const questions = aPlat(qcm);
-  const cleLocale = `mdepi-copie-${s.id}-${app.profil.id}`;
+  const fin = Date.parse(s.fin);
+  const file = fileCopie(app, s.id);
+  file.rouvrir();
 
-  // Réponses : celles du serveur, complétées par celles qui attendent sur l'appareil.
+  // Réponses : celles du serveur, puis celles arrivées chez lui pendant qu'on
+  // lisait la copie, puis celles qui attendent encore sur l'appareil.
   const reponses = structuredClone(copie.reponses || {});
-  let attente = {};
-  try {
-    attente = JSON.parse(localStorage.getItem(cleLocale) || '{}');
-  } catch {
-    /* stockage indisponible */
+  for (const [qid, r] of Object.entries(file.envoyeesDepuis(lu))) {
+    reponses[qid] = { ...reponses[qid], choix: r.choix, texte: r.texte, validee: !!r.valider || !!reponses[qid]?.validee };
   }
-  for (const [qid, r] of Object.entries(attente)) {
-    if (reponses[qid]?.validee) delete attente[qid];
-    else reponses[qid] = { ...reponses[qid], ...r, validee: !!r.valider };
+  for (const [qid, r] of Object.entries(file.enAttente())) {
+    if (reponses[qid]?.validee) file.oublier(qid);
+    else reponses[qid] = { ...reponses[qid], choix: r.choix, texte: r.texte, validee: !!r.valider };
   }
-  const garderAttente = () => {
-    try {
-      localStorage.setItem(cleLocale, JSON.stringify(attente));
-    } catch {
-      /* ignoré */
-    }
-  };
 
   const rep = (q) => reponses[q.id] || { choix: [], texte: '', validee: false };
   const aRepondu = (q) => (q.type === 'QROC' ? !!rep(q).texte?.trim() : rep(q).choix?.length > 0);
@@ -167,7 +194,7 @@ async function passage(app, s, copie) {
       <a class="btn-icone" href="#/epreuves" aria-label="Quitter (vos réponses sont gardées)">${icones.retour(20)}</a>
       <div class="pile-mini passage-titre"><strong>${s.titre}</strong><span class="aide" data-statut>Réponses enregistrées</span></div>
       <a class="btn-icone" href="#/" aria-label="Revenir à l'accueil (vos réponses sont gardées)" title="Revenir à l'accueil">${icones.accueil(20)}</a>
-      <div class="chrono" data-chrono title="Temps restant">${chrono(new Date(s.fin) - new Date())}</div>
+      <div class="chrono" data-chrono title="Temps restant">${chrono(fin - horloge())}</div>
     </header>
     <div class="passage-corps">
       <nav class="passage-nav" aria-label="Questions" data-nav></nav>
@@ -177,58 +204,66 @@ async function passage(app, s, copie) {
   </div>`;
 
   function monter(el) {
-    document.body.classList.add('mode-epreuve');
+    ecransOuverts++;
+    modeEpreuve();
     const statut = el.querySelector('[data-statut]');
     const zoneQ = el.querySelector('[data-question]');
     const zoneNav = el.querySelector('[data-nav]');
     const resume = el.querySelector('[data-resume]');
-    let fini = false;
+    let actif = true; // cet écran est affiché
+    let fini = false; // copie envoyée, ou épreuve fermée par le serveur
+    let tempsEcoule = false;
     let confirmerVide = false;
 
-    // --- Enregistrement ---
+    // --- Enregistrement (voir lib/envoi.js) ---
     const afficherStatut = (texte, classe = '') => {
       statut.textContent = texte;
       statut.className = 'aide ' + classe;
     };
-    // Envoie les réponses en attente, dans l'ordre. Renvoie une promesse que
-    // l'on peut attendre (chargement de la question suivante d'un dossier).
-    let envoi = null;
-    function envoyer() {
-      if (fini) return Promise.resolve();
-      if (!envoi) envoi = vider().finally(() => (envoi = null));
-      return envoi;
-    }
-    async function vider() {
-      try {
-        while (Object.keys(attente).length && !fini) {
-          const [qid, r] = Object.entries(attente)[0];
-          afficherStatut('Enregistrement…');
-          try {
-            await app.api.enregistrerReponse(s.id, qid, r.choix, r.texte, r.valider);
-            if (attente[qid] === r) delete attente[qid]; // sinon modifiée entre-temps : renvoyée au tour suivant
-          } catch (err) {
-            if (erreurReseau(err)) throw err;
-            delete attente[qid]; // refus définitif (question déjà validée, épreuve fermée…)
-            app.message(err.message, 'erreur');
-            if (/fermée|rendue/i.test(err.message)) {
-              terminer(true);
-              return;
-            }
-          }
-          garderAttente();
+    const desabonner = file.ecouter({
+      statut(etat) {
+        if (etat === 'envoi') afficherStatut('Enregistrement…');
+        else if (etat === 'ok') afficherStatut(`Réponses enregistrées · ${heure(new Date().toISOString())}`, 'ok');
+        else afficherStatut('Hors ligne : vos réponses sont gardées sur cet appareil', 'attention');
+      },
+      refus(message, qid) {
+        if (/déjà validée/i.test(message)) {
+          // Validée ici aussi : la même validation est partie deux fois, rien à dire.
+          if (reponses[qid]?.validee) return;
+          // Validée ailleurs (autre appareil) : on reprend l'état du serveur.
+          app.message(message, 'erreur');
+          if (actif) app.rafraichir();
+          return;
         }
-        afficherStatut(`Réponses enregistrées · ${heure(new Date().toISOString())}`, 'ok');
-      } catch {
-        afficherStatut('Hors ligne : vos réponses sont gardées sur cet appareil', 'attention');
-        setTimeout(envoyer, 5000);
-      }
+        app.message(message, 'erreur');
+      },
+      // Épreuve fermée ou copie déjà rendue : le serveur n'accepte plus rien.
+      fermee(message) {
+        conclure(message, 'erreur');
+      },
+    });
+    function noter(q, valider = false) {
+      if (fini) return;
+      const r = rep(q);
+      reponses[q.id] = { ...r, validee: r.validee || valider };
+      file.noter(q.id, { choix: r.choix || [], texte: r.texte || '', valider: reponses[q.id].validee });
+    }
+    // Texte d'une QROC en cours de frappe : noté 0,6 s après la dernière
+    // touche, ou tout de suite s'il faut partir (fin du temps, autre écran).
+    let minuterie = null;
+    let saisie = null;
+    function noterSaisie() {
+      clearTimeout(minuterie);
+      if (!saisie) return;
+      const q = saisie;
+      saisie = null;
+      noter(q);
     }
     // Question d'un dossier progressif pas encore reçue : la base ne l'envoie
     // qu'une fois la précédente validée chez elle, donc on envoie d'abord.
     async function charger(q) {
       if (!q.verrouillee) return true;
-      await envoyer();
-      if (Object.keys(attente).length) return false;
+      if (!(await file.toutEnvoyer())) return false;
       // La validation vient d'arriver en base : on réessaie un peu avant
       // d'annoncer un problème de réseau.
       let c = null;
@@ -240,14 +275,6 @@ async function passage(app, s, copie) {
       Object.assign(q, c, { verrouillee: false });
       return true;
     }
-    function noter(q, valider = false) {
-      const r = rep(q);
-      reponses[q.id] = { ...r, validee: r.validee || valider };
-      attente[q.id] = { choix: r.choix || [], texte: r.texte || '', valider: reponses[q.id].validee };
-      garderAttente();
-      envoyer();
-    }
-    window.addEventListener('online', envoyer);
 
     // --- Affichage ---
     function dessinerNav() {
@@ -258,12 +285,12 @@ async function passage(app, s, copie) {
             .filter((q) => q.di === di)
             .map((q) => {
               const cls = [rep(q).validee ? 'validee' : aRepondu(q) ? 'repondue' : '', q.num - 1 === courant ? 'courante' : '', accessible(q) ? '' : 'verrouillee'].join(' ');
-              return html`<button class="num ${cls}" data-aller="${q.num - 1}" ${accessible(q) ? '' : 'disabled'}
+              return html`<button class="num ${cls}" data-aller="${q.num - 1}" ${accessible(q) && !tempsEcoule ? '' : 'disabled'}
                 aria-label="Question ${q.num}${rep(q).validee ? ', validée' : aRepondu(q) ? ', répondue' : ''}">${q.num}</button>`;
             })}</div>
         </div>`
       )}
-      <button class="btn contour terminer" data-action="resume">Tout envoyer et terminer</button>`);
+      <button class="btn contour terminer" data-action="resume" ${tempsEcoule ? 'disabled' : ''}>Tout envoyer et terminer</button>`);
     }
 
     function dessinerQuestion() {
@@ -324,20 +351,31 @@ async function passage(app, s, copie) {
             : html`<button class="btn plein" data-action="valider">${suivante && suivante.di === q.di ? 'Valider et passer à la suite' : 'Valider la question'}</button>`}
         </div>`);
       chargerImages(zoneQ, app.api);
-      zoneQ.querySelector('[data-qroc]')?.focus({ preventScroll: true });
+      // QROC : prêt à taper, curseur à la fin de ce qui est déjà écrit.
+      const champ = zoneQ.querySelector('[data-qroc]:not([disabled])');
+      if (champ) {
+        champ.focus({ preventScroll: true });
+        champ.setSelectionRange(champ.value.length, champ.value.length);
+      }
     }
 
-    async function aller(i) {
-      if (i < 0 || i >= questions.length || !accessible(questions[i])) return;
+    // discret : nouvel essai automatique, sans réafficher « Chargement ».
+    let attenteQuestion = null;
+    async function aller(i, discret = false) {
+      if (!actif || tempsEcoule || i < 0 || i >= questions.length || !accessible(questions[i])) return;
+      noterSaisie();
+      clearTimeout(attenteQuestion);
       courant = i;
       dessinerNav();
       if (questions[i].verrouillee) {
-        zoneQ.innerHTML = '<p class="aide">Chargement de la question…</p>';
+        if (!discret) zoneQ.innerHTML = '<p class="aide">Chargement de la question…</p>';
         const ok = await charger(questions[i]);
-        if (courant !== i) return;
+        if (!actif || tempsEcoule || courant !== i) return;
         if (!ok) {
           zoneQ.innerHTML = String(html`<p class="alerte attention">La question suivante s'affichera dès le retour du réseau. Vos réponses sont gardées sur cet appareil.</p>`);
-          window.addEventListener('online', () => courant === i && aller(i), { once: true });
+          // Nouvel essai toutes les 5 secondes, et dès le retour du réseau.
+          clearTimeout(attenteQuestion);
+          attenteQuestion = setTimeout(() => courant === i && aller(i, true), 5000);
           return;
         }
       }
@@ -346,9 +384,12 @@ async function passage(app, s, copie) {
       // sommaire est au-dessus : il ne faut pas y remonter).
       ancrerQuestion(zoneQ);
     }
+    const auRetourDuReseau = () => questions[courant]?.verrouillee && aller(courant, true);
+    window.addEventListener('online', auRetourDuReseau);
 
     // --- Résumé et envoi final ---
     function montrerResume() {
+      noterSaisie();
       const n = (f) => questions.filter(f).length;
       const etat = (q) => (rep(q).validee ? 'Validée' : aRepondu(q) ? 'Réponse enregistrée (non validée)' : 'Sans réponse');
       resume.innerHTML = String(html`<div class="resume-boite carte pile" role="dialog" aria-modal="true" aria-labelledby="titre-resume">
@@ -367,39 +408,47 @@ async function passage(app, s, copie) {
       resume.querySelector('[data-action=retour]').focus();
     }
 
+    // Fin de l'épreuve sur cet appareil : plus rien à envoyer, retour à la page d'informations.
+    function conclure(texte, type) {
+      if (fini) return;
+      fini = true;
+      file.fermer();
+      const affiche = document.body.contains(el);
+      nettoyer();
+      app.message(texte, type);
+      if (affiche) app.rafraichir();
+    }
+
     let finEnCours = false;
+    let reessai = null;
+    let essais = 0;
     async function terminer(auto = false) {
       if (fini || finEnCours) return;
       finEnCours = true;
+      clearTimeout(reessai);
       try {
-        // Dernières réponses en attente.
-        for (const [qid, r] of Object.entries(attente)) {
-          try {
-            await app.api.enregistrerReponse(s.id, qid, r.choix, r.texte, r.valider);
-          } catch (err) {
-            if (erreurReseau(err)) throw err;
-          }
-          delete attente[qid];
+        noterSaisie();
+        // D'abord les dernières réponses, puis la remise de la copie.
+        if (!(await file.toutEnvoyer())) throw new Error('Pas de connexion internet.');
+        if (fini) return; // fermée par le serveur pendant l'envoi
+        await app.api.rendreCopie(s.id);
+        conclure(auto ? 'Temps écoulé : votre copie a été envoyée.' : 'Copie envoyée.');
+      } catch (err) {
+        if (fini) return;
+        const horsLigne = erreurReseau(err) || (typeof navigator !== 'undefined' && navigator.onLine === false);
+        const raison = horsLigne ? ' : pas de connexion' : '';
+        if (auto || tempsEcoule) {
+          // Pas de message à répétition : l'écran explique, et l'app réessaie seule.
+          zoneQ.innerHTML = String(html`<p class="alerte attention">Temps écoulé. Envoi impossible pour l'instant${raison}. Vos réponses sont gardées sur cet appareil et l'app réessaie toute seule : laissez cette page ouverte.</p>`);
+          if (actif) reessai = setTimeout(() => terminer(true), essais++ < 24 ? 5000 : 30000);
+        } else {
+          const texte = `Envoi impossible pour l'instant${raison}. Vos réponses sont gardées sur cet appareil ; réessayez dans un instant.`;
+          const p = resume.querySelector('.erreur');
+          if (p && !resume.hidden) {
+            p.textContent = texte;
+            p.hidden = false;
+          } else app.message(texte, 'erreur');
         }
-        fini = true;
-        await app.api.rendreCopie(s.id).catch(() => {});
-        try {
-          localStorage.removeItem(cleLocale);
-        } catch {
-          /* stockage indisponible */
-        }
-        app.message(auto ? "Temps écoulé : votre copie a été envoyée." : 'Copie envoyée.');
-        nettoyer();
-        app.rafraichir();
-      } catch {
-        garderAttente();
-        const p = resume.querySelector('.erreur');
-        const texte = "Envoi impossible : pas de connexion. Vos réponses sont gardées sur cet appareil ; réessayez dès le retour du réseau.";
-        if (p) {
-          p.textContent = texte;
-          p.hidden = false;
-        } else app.message(texte, 'erreur');
-        if (auto) setTimeout(() => terminer(true), 5000);
       } finally {
         finEnCours = false;
       }
@@ -407,7 +456,7 @@ async function passage(app, s, copie) {
 
     // --- Événements ---
     el.addEventListener('change', (e) => {
-      if (e.target.name !== 'p') return;
+      if (e.target.name !== 'p' || tempsEcoule) return;
       const q = questions[courant];
       // QRP : pas plus de n cases.
       if (q.type === 'QRP' && e.target.checked && zoneQ.querySelectorAll('input[name=p]:checked').length > (q.nb_reponses || 99)) {
@@ -421,15 +470,15 @@ async function passage(app, s, copie) {
       noter(q);
       dessinerNav();
     });
-    let minuterie;
     el.addEventListener('input', (e) => {
-      if (!e.target.matches('[data-qroc]')) return;
+      if (!e.target.matches('[data-qroc]') || tempsEcoule) return;
       const q = questions[courant];
       reponses[q.id] = { ...rep(q), texte: e.target.value };
+      saisie = q;
       clearTimeout(minuterie);
       minuterie = setTimeout(() => {
-        noter(q);
-        dessinerNav();
+        noterSaisie();
+        if (actif) dessinerNav();
       }, 600);
     });
     el.addEventListener('click', (e) => {
@@ -437,7 +486,7 @@ async function passage(app, s, copie) {
       if (!cible || cible.disabled) return;
       if (cible.dataset.aller !== undefined) return aller(Number(cible.dataset.aller));
       const action = cible.dataset.action;
-      if (action === 'valider') {
+      if (action === 'valider' && !tempsEcoule) {
         const q = questions[courant];
         const champ = zoneQ.querySelector('[data-qroc]');
         if (champ) reponses[q.id] = { ...rep(q), texte: champ.value };
@@ -447,6 +496,7 @@ async function passage(app, s, copie) {
           return;
         }
         clearTimeout(minuterie);
+        saisie = null;
         noter(q, true);
         const suivante = questions.findIndex((x, i) => i > courant && !rep(x).validee && accessible(x));
         if (suivante >= 0) aller(suivante);
@@ -469,16 +519,34 @@ async function passage(app, s, copie) {
     const elChrono = el.querySelector('[data-chrono]');
     const tic = setInterval(() => {
       if (!document.body.contains(el)) return nettoyer();
-      const reste = new Date(s.fin) - new Date();
+      const reste = fin - horloge();
       elChrono.textContent = chrono(reste);
       elChrono.classList.toggle('urgent', reste < 5 * 60000);
-      if (reste <= 0) terminer(true);
+      if (reste <= 0 && !tempsEcoule) {
+        // Heure de fin : on garde ce qui est en cours de frappe, on fige
+        // l'écran et la copie part toute seule (une seule fois).
+        noterSaisie();
+        tempsEcoule = true;
+        resume.hidden = true;
+        dessinerNav();
+        zoneQ.innerHTML = '<p class="alerte">Temps écoulé : envoi de votre copie…</p>';
+        terminer(true);
+      }
     }, 1000);
+    // L'étudiant quitte l'écran : les réponses déjà notées continuent de
+    // partir (la file d'envoi vit en dehors de l'écran).
     function nettoyer() {
+      if (!actif) return;
+      noterSaisie();
+      actif = false;
       clearInterval(tic);
-      window.removeEventListener('online', envoyer);
+      clearTimeout(reessai);
+      clearTimeout(attenteQuestion);
+      desabonner();
+      window.removeEventListener('online', auRetourDuReseau);
       window.removeEventListener('hashchange', nettoyer);
-      document.body.classList.remove('mode-epreuve');
+      ecransOuverts--;
+      modeEpreuve();
     }
     window.addEventListener('hashchange', nettoyer);
 
@@ -487,7 +555,7 @@ async function passage(app, s, copie) {
       dessinerNav();
       dessinerQuestion();
     }
-    if (Object.keys(attente).length) envoyer();
+    if (!file.vide()) file.envoyer();
   }
 
   return { html: vue, monter, titre: s.titre };

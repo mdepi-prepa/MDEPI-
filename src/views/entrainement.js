@@ -12,6 +12,7 @@ import { pointsPonderes, coefficient, formatNote, noteSur20 } from '../lib/barem
 import { serieDe, aPlat, lettre, htmlQcm, chargerImages, LIBELLES_TYPES, noterCopie, CATEGORIES, categorieDe } from '../lib/qcm.js';
 import { ancrerQuestion, enTete, stylePromo } from './commun.js';
 import { questionCorrigee, sommaireCopie } from './qcm-rendu.js';
+import { erreurReseau } from '../lib/envoi.js';
 
 const CLE_ONGLET = 'mdepi-entrainement-onglet';
 const lireOnglet = () => {
@@ -41,20 +42,26 @@ const ecrireJson = (cle, valeur) => {
   }
 };
 let envoiAttente = null;
-let ecouteReseau = false;
-function envoyerScoresEnAttente(app) {
+// Appelée à l'ouverture de l'app et des écrans d'entraînement. Chaque score
+// porte le compte qui l'a obtenu : il ne part jamais sous un autre compte.
+export function envoyerScoresEnAttente(app) {
+  const moi = app.profil?.id;
+  if (!moi) return Promise.resolve();
   if (envoiAttente) return envoiAttente;
+  const liste = () => {
+    const l = lireJson(CLE_ATTENTE, []);
+    return Array.isArray(l) ? l : [];
+  };
   envoiAttente = (async () => {
-    let liste = lireJson(CLE_ATTENTE, []);
-    while (liste.length) {
-      const [t] = liste;
+    let t;
+    while ((t = liste().find((x) => !x.compte || x.compte === moi))) {
       try {
         await app.api.enregistrerEntrainement(t.seance, t.reponses, t.points, t.total);
       } catch (err) {
-        if (/connexion|fetch|network/i.test(err.message)) break;
+        if (erreurReseau(err) || (typeof navigator !== 'undefined' && navigator.onLine === false)) break;
       }
-      liste = lireJson(CLE_ATTENTE, []).filter((x) => x.le !== t.le);
-      ecrireJson(CLE_ATTENTE, liste.length ? liste : null);
+      const reste = liste().filter((x) => x.le !== t.le);
+      ecrireJson(CLE_ATTENTE, reste.length ? reste : null);
     }
   })().finally(() => (envoiAttente = null));
   return envoiAttente;
@@ -173,9 +180,11 @@ export async function vueRejouer(app, { id }) {
   // Conférence annuelle : même écran que l'épreuve (questions validées une à
   // une sans correction, correction complète à la fin), sans chrono.
   const examen = categorieDe(s) === 'conference';
-  // Questions ratées : dernière tentative d'entraînement, sinon la copie de l'épreuve.
-  const derniere = tentatives.find((e) => e.serie_id === serieDe(s));
-  const source = derniere?.reponses || copie?.reponses;
+  // Questions ratées : d'après la dernière réponse donnée à chaque question
+  // (copie de l'épreuve, puis entraînements du plus ancien au plus récent).
+  // Un entraînement sur quelques questions ne remplace que celles-là.
+  const miennes = tentatives.filter((e) => e.serie_id === serieDe(s));
+  const source = copie || miennes.length ? Object.assign({}, copie?.reponses, ...[...miennes].reverse().map((e) => e.reponses || {})) : null;
   const ratees = source ? toutes.filter((q) => coefficient(q) > 0 && pointsPonderes(q, corrections[q.id], source[q.id]) < coefficient(q)) : [];
 
   const vue = html`<div class="page">
@@ -185,10 +194,6 @@ export async function vueRejouer(app, { id }) {
 
   function monter(el) {
     envoyerScoresEnAttente(app);
-    if (!ecouteReseau) {
-      ecouteReseau = true;
-      window.addEventListener('online', () => envoyerScoresEnAttente(app));
-    }
     const zone = el.querySelector('[data-zone]');
     let questions = [];
     let i = 0;
@@ -230,10 +235,12 @@ export async function vueRejouer(app, { id }) {
         </div>
         <div class="resume" data-resume hidden></div>
       </div>`);
-      allerA(0);
-      // Reprise : on revient sur la question où l'on s'était arrêté.
-      while (depuis > courant && accessible(courant + 1)) allerA(courant + 1);
-      if (!depuis) window.scrollTo(0, 0);
+      // Reprise : on revient sur la question où l'on s'était arrêté (ou, si
+      // elle n'est pas encore ouverte, sur la dernière qui l'est avant elle).
+      let cible = Math.min(Math.max(0, depuis), questions.length - 1);
+      while (cible > 0 && !accessible(cible)) cible--;
+      allerA(cible);
+      if (!cible) window.scrollTo(0, 0);
     };
 
     const dessinerNavE = () => {
@@ -336,7 +343,6 @@ export async function vueRejouer(app, { id }) {
         return;
       }
       reponses[q.id] = { ...repE(q), validee: true };
-      sauver();
       const suivante = questions.findIndex((x, k) => k > courant && !repE(x).validee && accessible(k));
       if (suivante >= 0) allerA(suivante);
       else {
@@ -344,6 +350,8 @@ export async function vueRejouer(app, { id }) {
         dessinerQuestionE();
         if (questions.every((x) => repE(x).validee)) montrerResumeE();
       }
+      // Gardé après le passage à la suite : la reprise se fait sur la question suivante.
+      sauver();
     };
 
     const montrerResumeE = () => {
@@ -381,7 +389,7 @@ export async function vueRejouer(app, { id }) {
           <button class="btn ${reprise ? 'contour' : 'plein'}" data-depart="tout">Rejouer toute l'épreuve</button>
           ${ratees.length ? html`<button class="btn contour" data-depart="ratees">Refaire mes ${ratees.length} question${ratees.length > 1 ? 's' : ''} ratée${ratees.length > 1 ? 's' : ''}</button>` : ''}
         </div>
-        ${ratees.length ? html`<p class="aide">Questions ratées d'après ${derniere ? 'votre dernière tentative' : 'votre copie de l’épreuve'}.</p>` : ''}
+        ${ratees.length ? html`<p class="aide">Questions ratées d'après ${miennes.length ? 'vos dernières réponses' : 'votre copie de l’épreuve'}.</p>` : ''}
       </section>`);
     };
 
@@ -437,9 +445,22 @@ export async function vueRejouer(app, { id }) {
       chargerImages(zone, app.api);
     };
 
+    // Un double clic sur « Terminer » ne doit enregistrer qu'un seul score.
+    let finEnCours = false;
     const fin = async () => {
-      if (!questions.length) return;
+      if (!questions.length || finEnCours) return;
+      finEnCours = true;
+      try {
+        await terminerTentative();
+      } finally {
+        finEnCours = false;
+      }
+    };
+    const terminerTentative = async () => {
       quitterPassage();
+      // Toutes les questions jouées figurent dans la tentative, même sans
+      // réponse : c'est ce qui permet de savoir lesquelles ont été refaites.
+      for (const q of questions) reponses[q.id] = reponses[q.id] || { question_id: q.id, choix: [], texte: '' };
       const { points: pts, total, note20: note } = noterCopie(questions, corrections, reponses);
       // Questions jouées regroupées par dossier (pour le sommaire).
       const dossiers = [];
@@ -449,11 +470,11 @@ export async function vueRejouer(app, { id }) {
         else dossiers.push({ ref: q.dossier, titre: q.dossier.titre, questions: [q] });
       }
       ecrireJson(cleTentative, null);
-      const score = { seance: s.id, reponses, points: Math.round(pts * 100) / 100, total, le: Date.now() };
+      const score = { seance: s.id, compte: app.profil.id, reponses, points: Math.round(pts * 100) / 100, total, le: Date.now() };
       try {
         await app.api.enregistrerEntrainement(score.seance, score.reponses, score.points, score.total);
       } catch (err) {
-        if (/connexion|fetch|network/i.test(err.message) || !navigator.onLine) {
+        if (erreurReseau(err) || navigator.onLine === false) {
           ecrireJson(CLE_ATTENTE, [...lireJson(CLE_ATTENTE, []), score]);
           app.message("Pas de connexion : votre score est gardé sur cet appareil et sera enregistré dès le retour du réseau.");
         } else app.message('Score non enregistré : ' + err.message, 'erreur');
@@ -522,9 +543,12 @@ export async function vueRejouer(app, { id }) {
       else if (b.dataset.action === 'envoyer') fin();
       else if (b.dataset.action === 'verifier' && !verifiee) verifier();
       else if (b.dataset.action === 'suivante') {
-        sauver();
-        if (++i < questions.length) dessiner();
-        else fin();
+        // On garde la position APRÈS être passé à la suite : à la reprise, on
+        // ne retombe pas sur la question que l'on vient de corriger.
+        if (++i < questions.length) {
+          sauver();
+          dessiner();
+        } else fin();
       }
     });
     accueil();

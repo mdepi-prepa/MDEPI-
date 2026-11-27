@@ -19,8 +19,9 @@ import { vueAdminComptes } from './views/admin/comptes.js';
 import { vueAdminSeances, vueAdminSeance } from './views/admin/seances.js';
 import { vueAdminAnnonces } from './views/admin/annonces.js';
 import { vueAdminEpreuves } from './views/admin/epreuves.js';
-import { vuePassage, vueMaCorrection } from './views/passage.js';
-import { vueEntrainement, vueRejouer } from './views/entrainement.js';
+import { vuePassage, vueMaCorrection, reprendreEnvois } from './views/passage.js';
+import { vueEntrainement, vueRejouer, envoyerScoresEnAttente } from './views/entrainement.js';
+import { arreterFiles, erreurReseau } from './lib/envoi.js';
 import { vueAdminQcm, vueAdminCorrige, vueAdminResultats, vueAdminCopie, vueAdminQroc } from './views/admin/qcm.js';
 import { vueAdminSaisie } from './views/admin/saisie.js';
 import { vueProgres } from './views/progres.js';
@@ -125,8 +126,13 @@ async function afficher() {
   if (!app.profil) {
     const vue = await vueConnexion(app);
     if (n !== numeroAffichage) return;
-    racine.innerHTML = String(vue.html);
-    vue.monter?.(racine);
+    // Conteneur neuf à chaque affichage : les clics branchés par l'écran
+    // précédent disparaissent avec lui (voir plus bas).
+    const hote = document.createElement('div');
+    hote.style.display = 'contents';
+    hote.innerHTML = String(vue.html);
+    racine.replaceChildren(hote);
+    vue.monter?.(hote);
     return;
   }
 
@@ -139,8 +145,6 @@ async function afficher() {
     racine.innerHTML = '<div class="coquille"><div class="nav-place"></div><main id="contenu" tabindex="-1"></main></div>';
   }
   racine.querySelector('.nav-place').innerHTML = String(navigation(app, onglet));
-  const contenu = racine.querySelector('#contenu');
-  contenu.classList.toggle('large', route.motif.startsWith('admin'));
 
   let vue;
   try {
@@ -152,27 +156,75 @@ async function afficher() {
     vue = { html: html`<div class="page"><h1>Oups</h1><p class="erreur">${e.message}</p><button class="btn" onclick="location.reload()">Réessayer</button></div>` };
   }
   if (n !== numeroAffichage) return;
+  // Chaque écran reçoit une zone <main> neuve. Sa fonction « monter » y branche
+  // ses clics : si l'on gardait la même zone d'un écran à l'autre, ces
+  // branchements s'accumuleraient et un clic serait traité plusieurs fois, par
+  // d'anciens écrans aussi (double confirmation, réponse d'épreuve renvoyée
+  // avec une valeur périmée…).
+  const ancien = racine.querySelector('#contenu');
+  const contenu = ancien.cloneNode(false);
+  contenu.classList.toggle('large', route.motif.startsWith('admin'));
   contenu.innerHTML = String(vue.html);
+  ancien.replaceWith(contenu);
   vue.monter?.(contenu);
   if (vue.titre) document.title = `${vue.titre} – MDEPi`;
   window.scrollTo(0, 0);
 }
 
+// Ce qui attend sur l'appareil (réponses d'épreuve, scores d'entraînement
+// donnés sans réseau) repart dès que l'on sait qui est connecté.
+function reprendreEnAttente() {
+  if (!app.profil) return;
+  reprendreEnvois(app);
+  envoyerScoresEnAttente(app);
+}
+
 async function demarrer() {
   app.api = await creerBackend();
-  const s = await app.api.session().catch(() => null);
+  let s = null;
+  try {
+    s = await app.api.session();
+  } catch (e) {
+    // Connecté sur cet appareil, mais serveur injoignable : on attend le
+    // réseau au lieu d'afficher l'écran de connexion (qui laisserait croire
+    // que l'on a été déconnecté).
+    if (erreurReseau(e)) {
+      racine.innerHTML = String(html`<div class="page"><h1>Pas de connexion</h1>
+        <p>L'app n'arrive pas à joindre le serveur. Vérifiez votre connexion internet : l'app se relancera toute seule dès son retour.</p>
+        <p class="aide">Si vous étiez en pleine épreuve, vos réponses déjà cochées sont gardées sur cet appareil.</p>
+        <button class="btn" onclick="location.reload()">Réessayer</button></div>`);
+      window.addEventListener('online', () => location.reload(), { once: true });
+      return;
+    }
+  }
   app.profil = s?.profil ?? null;
-  app.api.surChangement(async () => {
+  app.api.surChangement(async (evt) => {
     const avant = app.profil?.id ?? null;
-    const s2 = await app.api.session().catch(() => null);
+    let s2 = null;
+    try {
+      s2 = await app.api.session();
+    } catch (e) {
+      // Réseau coupé pendant une « reconnexion » silencieuse : on ne sait pas
+      // qui est connecté, donc on ne déconnecte personne (surtout pas en
+      // pleine épreuve).
+      if (evt !== 'SIGNED_OUT' && erreurReseau(e)) {
+        if (!avant) app.message('Pas de connexion internet : réessayez dans un instant.', 'erreur');
+        return;
+      }
+    }
     app.profil = s2?.profil ?? null;
     // Supabase signale aussi des « reconnexions » silencieuses : on ne
     // redessine que si la personne connectée a vraiment changé.
     if ((app.profil?.id ?? null) === avant) return;
+    // Les réponses en attente de l'ancien compte ne partent pas sous le nouveau.
+    arreterFiles();
+    reprendreEnAttente();
     racine.innerHTML = '';
     if (app.profil && location.hash !== '#/accueil') location.hash = '#/accueil';
     else afficher();
   });
+  reprendreEnAttente();
+  window.addEventListener('online', () => envoyerScoresEnAttente(app));
   window.addEventListener('hashchange', afficher);
   // Liens internes à une page (sommaire d'une copie) : défilement sans changer d'écran.
   document.addEventListener('click', (e) => {

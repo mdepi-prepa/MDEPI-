@@ -16,6 +16,22 @@ export function creerBackendSupabase(url, cleAnon) {
     if (error) throw new Error(traduireErreur(error));
     return data;
   };
+  // Compte connecté, lu sur l'appareil (sans aller-retour avec le serveur).
+  const moi = async () => (await sb.auth.getSession()).data.session?.user?.id || null;
+  // Supabase renvoie au plus 1000 lignes par requête : les longues listes
+  // (planning de l'année, inscrits) se lisent page par page, sinon les
+  // dernières lignes manqueraient sans prévenir.
+  const PAGE = 1000;
+  const toutLire = async (requete) => {
+    const lignes = [];
+    for (let debut = 0; ; debut += PAGE) {
+      const page = verifier(await requete().range(debut, debut + PAGE - 1));
+      lignes.push(...page);
+      if (page.length < PAGE) return lignes;
+    }
+  };
+  // Écart entre l'horloge du serveur et celle de l'appareil (en ms).
+  let decalage = null;
 
   return {
     mode: 'supabase',
@@ -50,7 +66,7 @@ export function creerBackendSupabase(url, cleAnon) {
 
     // ---------- Planning ----------
     async seances() {
-      return verifier(await sb.from('seances').select('*').order('debut'));
+      return toutLire(() => sb.from('seances').select('*').order('debut').order('id'));
     },
     // Épreuves de tous les groupes (intitulé, horaire, groupe, salle).
     async planningGlobal(debut, fin) {
@@ -104,7 +120,11 @@ export function creerBackendSupabase(url, cleAnon) {
     async corrections(seanceId) {
       const ids = (await this.qcm(seanceId)).flatMap((d) => d.questions.map((q) => q.id));
       if (!ids.length) return {};
-      const rows = verifier(await sb.from('corrections').select('*').in('question_id', ids));
+      // Par paquets : la liste des questions voyage dans l'adresse de la
+      // requête, qui ne doit pas devenir trop longue pour un gros QCM.
+      const paquets = [];
+      for (let i = 0; i < ids.length; i += 80) paquets.push(ids.slice(i, i + 80));
+      const rows = (await Promise.all(paquets.map((p) => sb.from('corrections').select('*').in('question_id', p)))).flatMap(verifier);
       return Object.fromEntries(rows.map((c) => [c.question_id, c]));
     },
     async urlsImages(chemins) {
@@ -221,8 +241,9 @@ export function creerBackendSupabase(url, cleAnon) {
       return verifier(await sb.rpc('commencer_epreuve', { p_seance: seanceId }));
     },
     async maCopie(seanceId) {
-      const { data: u } = await sb.auth.getUser();
-      const copie = verifier(await sb.from('copies').select('*, reponses(*)').eq('seance_id', seanceId).eq('user_id', u.user.id).maybeSingle());
+      const id = await moi();
+      if (!id) return null;
+      const copie = verifier(await sb.from('copies').select('*, reponses(*)').eq('seance_id', seanceId).eq('user_id', id).maybeSingle());
       if (!copie) return null;
       const { reponses, ...c } = copie;
       return { ...c, reponses: Object.fromEntries(reponses.map((r) => [r.question_id, r])) };
@@ -233,6 +254,26 @@ export function creerBackendSupabase(url, cleAnon) {
     async rendreCopie(seanceId) {
       verifier(await sb.rpc('rendre_copie', { p_seance: seanceId }));
     },
+    // Avance (+) ou retard (−) de l'horloge du serveur sur celle de l'appareil,
+    // en millisecondes. C'est le serveur qui ferme l'épreuve : le chronomètre
+    // doit suivre son heure, même si l'appareil est mal réglé. 0 si l'écart
+    // est négligeable ou impossible à mesurer (base pas encore mise à jour…).
+    async decalageHorloge() {
+      if (decalage !== null) return decalage;
+      try {
+        const t0 = Date.now();
+        const { data, error } = await sb.rpc('heure_serveur');
+        const t1 = Date.now();
+        const serveur = Date.parse(data);
+        if (error || !Number.isFinite(serveur)) return 0;
+        const ecart = serveur - (t0 + t1) / 2;
+        // En dessous de la précision de la mesure, on garde l'heure de l'appareil.
+        decalage = Math.abs(ecart) < Math.max(2000, t1 - t0) ? 0 : Math.round(ecart);
+        return decalage;
+      } catch {
+        return 0;
+      }
+    },
     async monResultat(seanceId) {
       const [r] = verifier(await sb.rpc('mon_resultat', { p_seance: seanceId }));
       return r ? { ...r, points: Number(r.points), note20: Number(r.note20), moyenne: Number(r.moyenne) } : null;
@@ -241,7 +282,11 @@ export function creerBackendSupabase(url, cleAnon) {
     // Résultats et copies de toute la série (équipe).
     // Entraînement (épreuves terminées rejouées, hors classement).
     async mesEntrainements() {
-      return verifier(await sb.from('entrainements').select('*').order('fait_le', { ascending: false }));
+      // Filtre explicite : l'équipe a le droit de lire les entraînements de
+      // tout le monde, mais cet écran ne doit montrer que les siens.
+      const id = await moi();
+      if (!id) return [];
+      return toutLire(() => sb.from('entrainements').select('*').eq('user_id', id).order('fait_le', { ascending: false }).order('id'));
     },
     async enregistrerEntrainement(seanceId, reponses, points, total) {
       const s = await this.seance(seanceId);
@@ -269,11 +314,11 @@ export function creerBackendSupabase(url, cleAnon) {
       return new Set(rows.map((r) => r.annonce_id));
     },
     async marquerLues(ids) {
-      const { data } = await sb.auth.getUser();
-      if (!ids.length || !data.user) return;
+      const id = await moi();
+      if (!ids.length || !id) return;
       verifier(
         await sb.from('annonces_lues').upsert(
-          ids.map((annonce_id) => ({ user_id: data.user.id, annonce_id })),
+          ids.map((annonce_id) => ({ user_id: id, annonce_id })),
           { onConflict: 'user_id,annonce_id', ignoreDuplicates: true }
         )
       );
@@ -290,7 +335,7 @@ export function creerBackendSupabase(url, cleAnon) {
       verifier(await sb.from('groupes').delete().eq('id', id));
     },
     async inscrits() {
-      return verifier(await sb.from('inscrits').select('*').order('nom').order('prenom'));
+      return toutLire(() => sb.from('inscrits').select('*').order('nom').order('prenom').order('email'));
     },
     async enregistrerInscrits(lignes) {
       verifier(await sb.from('inscrits').upsert(lignes, { onConflict: 'email' }));

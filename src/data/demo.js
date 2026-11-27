@@ -233,7 +233,7 @@ export function creerBackendDemo() {
   const notifier = (evt) => ecouteurs.forEach((cb) => cb(evt));
   const ouverte = (s) => s.epreuve && !s.annulee && new Date(s.debut) <= new Date() && new Date() <= new Date(new Date(s.fin).getTime() + 2 * 60000);
   const serieVisible = (serie, test) => estEquipe(profil()) || db.seances.some((x) => serieDe(x) === serie && peutVoirSeance(profil(), x) && test(x));
-  const voirSujet = (serie) => serieVisible(serie, (x) => new Date(x.debut) <= new Date());
+  const voirSujet = (serie) => serieVisible(serie, (x) => !x.annulee && new Date(x.debut) <= new Date());
   // Même règle que peut_voir_correction (schema.sql) : dès la fin de sa propre séance, ou publication anticipée.
   const groupesRestants = (serie) => db.seances.filter((x) => serieDe(x) === serie && !x.annulee && new Date(x.fin) > new Date()).length;
   // Même règle que resultats_publies (schema.sql) : jamais, dès la fin, ou à partir d'une date.
@@ -241,8 +241,10 @@ export function creerBackendDemo() {
   const publies = (x) => finie(x) && ((x.publication || 'cloture') === 'cloture' || (x.publication === 'date' && !!x.publication_le && new Date() >= new Date(x.publication_le)));
   const voirCorrection = (serie) =>
     serieVisible(serie, (x) => !x.annulee && (x.correction_publiee || publies(x) || ((x.categorie || 'conference') !== 'conference' && new Date(x.debut) <= new Date())));
+  // Seulement les copies des groupes qui ont fini : un groupe en train de
+  // composer ne doit pas faire disparaître les notes de ceux qui ont terminé.
   const qrocEnAttente = (serie) => {
-    const ids = new Set(db.seances.filter((x) => serieDe(x) === serie).map((x) => x.id));
+    const ids = new Set(db.seances.filter((x) => serieDe(x) === serie && !x.annulee && finie(x)).map((x) => x.id));
     return qrocACorriger(db.questions.filter((q) => q.serie_id === serie), db.corrections, db.copies.filter((c) => ids.has(c.seance_id)).map((c) => ({ reponses: Object.values(c.reponses) })));
   };
   // Même règle que question_accessible (schema.sql) : dossier progressif.
@@ -254,7 +256,7 @@ export function creerBackendDemo() {
     return db.copies.some((c) => ids.has(c.seance_id) && c.user_id === db.session && c.reponses[prec.id]?.validee);
   };
   const notesSerie = (serie, finies = false) => {
-    const ids = new Set(db.seances.filter((x) => serieDe(x) === serie && (!finies || new Date(x.fin) <= new Date())).map((x) => x.id));
+    const ids = new Set(db.seances.filter((x) => serieDe(x) === serie && (!finies || (finie(x) && !x.annulee))).map((x) => x.id));
     const questions = db.questions.filter((q) => q.serie_id === serie);
     const lignes = db.copies
       .filter((c) => ids.has(c.seance_id))
@@ -335,8 +337,8 @@ export function creerBackendDemo() {
       // Même règle que documents_seance et peut_voir_document (schema.sql) :
       // une épreuve dupliquée partage ses PDF, chaque groupe les voit à la fin de sa séance.
       const visible = (d) =>
-        estEquipe(profil()) || !s.epreuve || s.correction_publiee || publies(s) ||
-        ((d.type === 'support' || d.type === 'sujet') && finie(s));
+        estEquipe(profil()) || !s.epreuve ||
+        (!s.annulee && (s.correction_publiee || publies(s) || ((d.type === 'support' || d.type === 'sujet') && finie(s))));
       const serie = s.serie || s.id;
       const memeSerie = (x) => x.id === s.id || (x.epreuve && s.epreuve && (x.serie || x.id) === serie);
       const ids = new Set(db.seances.filter(memeSerie).map((x) => x.id));
@@ -537,15 +539,20 @@ export function creerBackendDemo() {
       if (!q) throw new Error('Question introuvable.');
       if ((choix || []).some((id) => !q.propositions.some((p) => p.id === id))) throw new Error('Proposition inconnue.');
       if (!questionAccessible(q)) throw new Error('Question pas encore accessible.');
-      if (q.type === 'QRP' && (choix || []).length > (q.nb_reponses || 99)) throw new Error(`Trop de cases cochées : ${q.nb_reponses} réponses attendues.`);
+      if (q.type === 'QRP' && new Set(choix || []).size > (q.nb_reponses || 99)) throw new Error(`Trop de cases cochées : ${q.nb_reponses} réponses attendues.`);
       if (c.reponses[questionId]?.validee) throw new Error('Question déjà validée.');
-      c.reponses[questionId] = { question_id: questionId, choix: choix || [], texte: (texte || '').slice(0, 500), validee: !!valider, modifiee_le: new Date().toISOString() };
+      c.reponses[questionId] = { question_id: questionId, choix: [...new Set(choix || [])], texte: (texte || '').slice(0, 500), validee: !!valider, modifiee_le: new Date().toISOString() };
       sauver();
     },
     async rendreCopie(seanceId) {
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) throw new Error('Pas de connexion internet.');
       const c = db.copies.find((x) => x.seance_id === seanceId && x.user_id === db.session);
       if (c && !c.rendue_le) c.rendue_le = new Date().toISOString();
       sauver();
+    },
+    // Démo : le « serveur » est l'appareil lui-même.
+    async decalageHorloge() {
+      return 0;
     },
     async monResultat(seanceId) {
       const s = await this.seance(seanceId);

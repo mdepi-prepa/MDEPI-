@@ -51,8 +51,12 @@ export async function vueAdminAnnonces(app) {
     el.addEventListener('click', async (e) => {
       const id = e.target.closest('[data-suppr]')?.dataset.suppr;
       if (id && confirm('Supprimer cette annonce ?')) {
-        await app.api.supprimerAnnonce(id);
-        app.rafraichir();
+        try {
+          await app.api.supprimerAnnonce(id);
+          app.rafraichir();
+        } catch (err) {
+          app.message(err.message, 'erreur');
+        }
       }
     });
   }

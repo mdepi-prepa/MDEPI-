@@ -167,6 +167,13 @@ describe('QRP, demi-point de QROC, coefficients', () => {
     expect(points(qrp, c, { choix: ['A', 'B', 'C', 'D'] })).toBe(0);
     expect(points(qrp, c, { choix: [] })).toBe(0);
     expect(points(qrp, { ...c, indispensables: ['C'] }, { choix: ['A', 'B'] })).toBe(0);
+    // Une case répétée ne compte qu'une fois (même règle que la base).
+    expect(points(qrp, c, { choix: ['A', 'A', 'A'] })).toBeCloseTo(1 / 3);
+  });
+  it('question sans correction enregistrée : 0 point, sans planter', () => {
+    expect(points(qrp, undefined, { choix: ['A'] })).toBe(0);
+    expect(points({ type: 'QRM', propositions: props }, undefined, { choix: ['A'] })).toBe(0);
+    expect(points({ type: 'QRU', propositions: props }, undefined, { choix: ['A'] })).toBe(0);
   });
   it('QRP importée : maxChoices plus petit que le nombre de propositions', () => {
     const q = { id: 'X', type: 'QRM', maxChoix: 2, propositions: props.map((p, i) => ({ ...p, texte: '', correcte: i < 2 })), coefficient: 2 };

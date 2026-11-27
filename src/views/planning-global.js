@@ -70,7 +70,7 @@ export function monterPlanningGlobal(el, app) {
         })}
       </div>
       <div class="cal-detail">
-        <p class="surtitre">${dateLongue(choisi + 'T12:00:00')}</p>
+        <p class="surtitre">${dateLongue(choisi + 'T12:00:00Z')}</p>
         ${duJour.length
           ? html`<ul class="cal-liste">${duJour.map(
               (e) => html`<li class="teinte-promo" style="${stylePromo(e.promos || [])}">

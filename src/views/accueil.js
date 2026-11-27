@@ -66,12 +66,8 @@ export async function vueAccueil(app) {
 
     <section class="pile-petite">
       <h2 class="titre-section">Bientôt dans l'app</h2>
-      <div class="grille-2">
-        <a href="#/entrainement" class="carte tuile"><span class="tuile-icone">${icones.entrainement(18)}</span>
-          <span class="tuile-texte">Dossiers progressifs importés de Théia</span></a>
-        <a href="#/cartes" class="carte tuile"><span class="tuile-icone">${icones.cartes(18)}</span>
-          <span class="tuile-texte">Flashcards en répétition espacée</span></a>
-      </div>
+      <a href="#/cartes" class="carte lien-ligne"><span class="tuile-icone">${icones.cartes(18)}</span>
+        <span class="tuile-texte">Flashcards en répétition espacée</span>${icones.chevron(16)}</a>
     </section>
 
     <section class="pile-petite">

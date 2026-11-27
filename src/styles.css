@@ -258,7 +258,7 @@ div.cases { display: flex; flex-direction: column; gap: 6px; }
 .segments-3 { grid-template-columns: repeat(3, 1fr); }
 button.segment { border: none; background: transparent; font: inherit; font-size: 13px; line-height: 1.2; padding: 4px 6px; text-align: center; cursor: pointer; }
 .segment.actif { background: #fff; color: var(--encre); font-weight: 600; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1); }
-.ligne-seance, .ligne-replay { display: flex; gap: 12px; align-items: center; padding: 12px; }
+.ligne-seance { display: flex; gap: 12px; align-items: center; padding: 12px; }
 .ligne-seance.est-annulee .ligne-titre { text-decoration: line-through; color: var(--encre-2); }
 .bloc-date { width: 54px; height: 60px; border-radius: 12px; flex: none; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; background: var(--fond); border: 1px solid var(--bord-2); }
 .bloc-date.epreuve { border-color: transparent; }
@@ -489,7 +489,6 @@ body.mode-epreuve #contenu > .passage { max-width: 1100px; margin: 0 auto; }
 .radio { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 14px; }
 .radio input[type=datetime-local] { font: inherit; font-size: 14px; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--bord); }
 .v-partielle { background: var(--orange-fond); color: var(--orange); }
-.chrono-entrainement { position: sticky; top: 8px; z-index: 4; align-self: flex-end; width: fit-content; margin-left: auto; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12); }
 
 /* Saisie manuelle d'un QCM */
 .btn.petit { min-height: 36px; padding: 6px 12px; font-size: 14px; }

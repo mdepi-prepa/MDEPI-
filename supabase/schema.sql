@@ -418,11 +418,13 @@ $$;
 
 -- Le sujet d'une série est-il visible pour moi ? (équipe : toujours ;
 -- étudiant : une séance de la série le concerne et elle a commencé)
+-- Une séance annulée n'ouvre rien : une épreuve reportée (annulée, puis
+-- dupliquée à une nouvelle date) ne dévoile pas son sujet à l'ancienne date.
 create or replace function public.peut_voir_sujet(p_serie uuid)
 returns boolean language sql stable security definer set search_path = public as $$
   select public.est_equipe() or exists (
     select 1 from public.seances s
-    where public.serie_de(s) = p_serie and public.peut_voir_seance(s) and now() >= s.debut)
+    where public.serie_de(s) = p_serie and public.peut_voir_seance(s) and not s.annulee and now() >= s.debut)
 $$;
 
 -- Résultats publiés pour cette séance, selon le choix de l'équipe : jamais,
@@ -609,9 +611,10 @@ begin
   -- Indispensable oubliée ou inacceptable cochée : 0 à la question.
   if not (coalesce(p_indispensables, '{}') <@ p_choix) or coalesce(p_inacceptables, '{}') && p_choix then return 0; end if;
   if p_type = 'QRP' then
+    -- Chaque case ne compte qu'une fois, même si elle figurait deux fois dans la réponse.
     n := coalesce(p_nb, nullif(cardinality(coalesce(p_bonnes, '{}')), 0), 1);
-    if cardinality(p_choix) > n then return 0; end if;
-    return (select count(*) from unnest(p_choix) x where x = any (coalesce(p_bonnes, '{}')))::numeric / n;
+    if (select count(distinct x) from unnest(p_choix) x) > n then return 0; end if;
+    return (select count(distinct x) from unnest(p_choix) x where x = any (coalesce(p_bonnes, '{}')))::numeric / n;
   end if;
   select count(*) into d from jsonb_array_elements(p_propositions) p
    where ((p->>'id') = any (coalesce(p_choix, '{}'))) <> ((p->>'id') = any (p_bonnes));
@@ -646,13 +649,19 @@ $$;
 -- groupes de réponses (même réponse à la mise en forme près) ni reconnues
 -- exactement, ni refusées, ni jugées acceptables. Tant qu'il en reste, la
 -- note et le rang ne sont pas montrés aux étudiants (comme Théia : statut « en cours »).
+-- Seules comptent les copies des séances terminées : un groupe en train de
+-- composer (réponses à moitié tapées) ne fait pas disparaître les notes des
+-- groupes qui ont déjà fini.
 create or replace function public.qroc_a_corriger(p_serie uuid)
 returns integer language sql stable security definer set search_path = public as $$
   select count(distinct (q.id, public.cle_qroc(r.texte)))::integer
   from public.questions q
   join public.corrections k on k.question_id = q.id
   join public.reponses r on r.question_id = q.id
+  join public.copies c on c.id = r.copie_id
+  join public.seances s on s.id = c.seance_id
   where q.serie_id = p_serie and q.type = 'QROC' and q.statut = 'normale'
+    and public.epreuve_finie(s) and not s.annulee
     and public.qroc_etat(r.texte, k.reponses_qroc, k.refusees_qroc, k.partielles_qroc) in ('approche', 'faux')
 $$;
 revoke execute on function public.qroc_a_corriger(uuid) from public, anon;
@@ -697,7 +706,7 @@ $$;
 -- Enregistrer une réponse (à chaque coche). p_valider = true verrouille la question.
 create or replace function public.enregistrer_reponse(p_seance uuid, p_question uuid, p_choix text[], p_texte text, p_valider boolean)
 returns void language plpgsql security definer set search_path = public as $$
-declare s public.seances; c public.copies; q public.questions; deja boolean;
+declare s public.seances; c public.copies; q public.questions; deja boolean; v_choix text[];
 begin
   select * into s from public.seances where id = p_seance;
   select * into c from public.copies where seance_id = p_seance and user_id = auth.uid();
@@ -711,13 +720,15 @@ begin
       select 1 from jsonb_array_elements(q.propositions) p where p->>'id' = x)) then
     raise exception 'Proposition inconnue';
   end if;
-  if q.type = 'QRP' and cardinality(coalesce(p_choix, '{}')) > coalesce(q.nb_reponses, 99) then
+  -- Une case cochée ne compte qu'une fois (réponse envoyée sans passer par l'app).
+  v_choix := array(select distinct x from unnest(coalesce(p_choix, '{}')) x order by x);
+  if q.type = 'QRP' and cardinality(v_choix) > coalesce(q.nb_reponses, 99) then
     raise exception 'Trop de cases cochées : % réponses attendues', q.nb_reponses;
   end if;
   select validee into deja from public.reponses where copie_id = c.id and question_id = q.id;
   if deja then raise exception 'Question déjà validée'; end if;
   insert into public.reponses (copie_id, question_id, choix, texte, validee, modifiee_le)
-  values (c.id, q.id, coalesce(p_choix, '{}'), left(coalesce(p_texte, ''), 500), coalesce(p_valider, false), now())
+  values (c.id, q.id, v_choix, left(coalesce(p_texte, ''), 500), coalesce(p_valider, false), now())
   on conflict (copie_id, question_id) do update
     set choix = excluded.choix, texte = excluded.texte, validee = excluded.validee, modifiee_le = now();
 end;
@@ -727,6 +738,13 @@ create or replace function public.rendre_copie(p_seance uuid)
 returns void language sql security definer set search_path = public as $$
   update public.copies set rendue_le = now() where seance_id = p_seance and user_id = auth.uid() and rendue_le is null
 $$;
+
+-- Heure du serveur : le chronomètre de l'épreuve la suit, pour qu'un appareil
+-- mal réglé ne coupe pas l'épreuve trop tôt (ou n'affiche pas du temps en trop).
+create or replace function public.heure_serveur()
+returns timestamptz language sql stable as $$ select now() $$;
+revoke execute on function public.heure_serveur() from public, anon;
+grant execute on function public.heure_serveur() to authenticated;
 
 -- Mon résultat, dès que les résultats de mon épreuve sont publiés (par défaut
 -- à sa fin) et que les QROC sont corrigées : note, moyenne et rang parmi les
@@ -863,14 +881,15 @@ create policy entrainements_ajout on public.entrainements for insert to authenti
 -- Les documents des autres séances : dès que la séance est visible.
 -- Épreuve dupliquée pour plusieurs groupes : un PDF déposé sur la séance d'un
 -- groupe sert à toute la série, et chaque groupe le voit à la fin de SA séance.
+-- Une épreuve annulée n'ouvre aucun PDF (elle peut être reposée plus tard).
 create or replace function public.peut_voir_document(p_seance uuid, p_type text)
 returns boolean language sql stable security definer set search_path = public as $$
   select public.est_equipe() or exists (
     select 1 from public.seances d
     join public.seances s on s.id = d.id or (d.epreuve and s.epreuve and public.serie_de(s) = public.serie_de(d))
     where d.id = p_seance and public.peut_voir_seance(s)
-      and (not s.epreuve or s.correction_publiee or public.resultats_publies(s)
-           or (p_type in ('support', 'sujet') and public.epreuve_finie(s))))
+      and (not s.epreuve or (not s.annulee and (s.correction_publiee or public.resultats_publies(s)
+           or (p_type in ('support', 'sujet') and public.epreuve_finie(s))))))
 $$;
 
 -- Documents d'une séance pour l'app : les siens et, pour une épreuve, ceux des

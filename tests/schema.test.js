@@ -316,6 +316,7 @@ describe('QCM des épreuves', () => {
     expect((await qrp(['A', 'B'])).toFixed(4)).toBe('0.6667');
     expect((await qrp(['A', 'D'])).toFixed(4)).toBe('0.3333');
     expect(await qrp(['A', 'B', 'C', 'D'])).toBe(0); // plus de n cases
+    expect((await qrp(['A', 'A', 'A'])).toFixed(4)).toBe('0.3333'); // une case répétée ne compte qu'une fois
     expect(await qrp([])).toBe(0);
     expect(await qrp(['A', 'B', 'E'], ['E'])).toBe(0);
     const qroc = async (texte) =>
@@ -331,6 +332,9 @@ describe('QCM des épreuves', () => {
     await db.query(`update copies set rendue_le = null where user_id = $1`, [ids.camille]);
     await expect(en(ids.camille, `select enregistrer_reponse($1, $2, '{A,B,C}', '', false)`, [q.e, x.id])).rejects.toThrow(/Trop de cases/);
     await en(ids.camille, `select enregistrer_reponse($1, $2, '{A,B}', '', false)`, [q.e, x.id]);
+    // Une case envoyée deux fois (sans passer par l'app) n'est gardée qu'une fois.
+    await en(ids.camille, `select enregistrer_reponse($1, $2, '{A,A}', '', false)`, [q.e, x.id]);
+    expect((await en(ids.camille, 'select choix from reponses where question_id = $1', [x.id]))[0].choix).toEqual(['A']);
     await db.query(`delete from reponses where question_id = $1`, [x.id]);
     await db.query(`delete from questions where id = $1`, [x.id]);
     await db.query(`update copies set rendue_le = now() where user_id = $1`, [ids.camille]);
@@ -440,6 +444,62 @@ describe('QCM des épreuves', () => {
     expect(await vues(ids.camille)).toEqual([img(0), img(1), img(2)]);
     await en(ids.prof, 'delete from seances where id = $1', [e.id]);
     await db.query(`delete from storage.objects where name like 'qcm/%'`);
+  });
+  it('épreuve annulée (reportée) : ni sujet, ni images, ni PDF, même une fois son heure passée', async () => {
+    const [o] = await en(ids.prof, `insert into seances (titre, debut, fin, promos, groupes, epreuve) values ('Reportée', now() - interval '10 minutes', now() + interval '1 hour', '{D2}', array[$1]::uuid[], true) returning id`, [ids.gA]);
+    // La même épreuve, reposée plus tard pour le même groupe (même QCM).
+    const [n] = await en(ids.prof, `insert into seances (titre, debut, fin, promos, groupes, epreuve, serie) values ('Nouvelle date', now() + interval '7 days', now() + interval '7 days 1 hour', '{D2}', array[$1]::uuid[], true, $2) returning id`, [ids.gA, o.id]);
+    const image = `qcm/${o.id}/1-image.png`;
+    const [d] = await en(ids.prof, `insert into dossiers (serie_id, titre) values ($1, 'DP') returning id`, [o.id]);
+    await en(ids.prof, `insert into questions (serie_id, dossier_id, qti_id, ordre, type, enonce, propositions) values ($1, $2, 'R1', 1, 'QRU', $3, '[{"id":"A"}]')`, [o.id, d.id, `<img src="qcm-img:${image}">`]);
+    await en(ids.prof, `insert into documents (seance_id, type, titre, chemin) values ($1,'support','Support reporté','report/a.pdf')`, [o.id]);
+    await db.query(`insert into storage.objects (bucket_id, name) values ('documents',$1),('documents','report/a.pdf')`, [image]);
+    const vu = async () => ({
+      questions: (await en(ids.camille, 'select 1 from questions where serie_id = $1', [o.id])).length,
+      dossiers: (await en(ids.camille, 'select 1 from dossiers where serie_id = $1', [o.id])).length,
+      plan: (await en(ids.camille, 'select 1 from plan_qcm($1)', [o.id])).length,
+      images: (await en(ids.camille, 'select 1 from storage.objects where name = $1', [image])).length,
+      pdf: (await en(ids.camille, 'select 1 from documents_seance($1)', [o.id])).length + (await en(ids.camille, `select 1 from storage.objects where name = 'report/a.pdf'`)).length,
+    });
+    // Ouverte : le sujet se lit (pas le PDF, réservé à la fin).
+    expect(await vu()).toEqual({ questions: 1, dossiers: 1, plan: 1, images: 1, pdf: 0 });
+    await en(ids.prof, 'update seances set annulee = true where id = $1', [o.id]);
+    expect(await vu()).toEqual({ questions: 0, dossiers: 0, plan: 0, images: 0, pdf: 0 });
+    await expect(en(ids.camille, 'select commencer_epreuve($1)', [o.id])).rejects.toThrow(/fermée/);
+    // Heure de fin de l'ancienne date passée : toujours rien (la nouvelle date n'a pas eu lieu).
+    await db.query(`update seances set debut = now() - interval '3 hours', fin = now() - interval '5 minutes' where id = $1`, [o.id]);
+    expect(await vu()).toEqual({ questions: 0, dossiers: 0, plan: 0, images: 0, pdf: 0 });
+    // L'équipe, elle, garde l'accès.
+    expect((await en(ids.prof, 'select 1 from questions where serie_id = $1', [o.id])).length).toBe(1);
+    await en(ids.prof, 'delete from seances where id = $1', [n.id]);
+    await en(ids.prof, 'delete from seances where id = $1', [o.id]);
+    await db.query(`delete from storage.objects where name in ($1, 'report/a.pdf')`, [image]);
+  });
+  it('QROC à corriger : un groupe en train de composer ne cache pas les notes du groupe qui a fini', async () => {
+    const [a] = await en(ids.prof, `insert into seances (titre, debut, fin, promos, groupes, epreuve) values ('QROC A', now() - interval '30 minutes', now() + interval '1 hour', '{D2}', array[$1]::uuid[], true) returning id`, [ids.gA]);
+    const [b] = await en(ids.prof, `insert into seances (titre, debut, fin, promos, groupes, epreuve, serie) values ('QROC B', now() - interval '30 minutes', now() + interval '1 hour', '{D2}', array[$1]::uuid[], true, $2) returning id`, [ids.gB, a.id]);
+    const [d] = await en(ids.prof, `insert into dossiers (serie_id, titre) values ($1, 'QI') returning id`, [a.id]);
+    const [x] = await en(ids.prof, `insert into questions (serie_id, dossier_id, qti_id, ordre, type) values ($1, $2, 'T1', 1, 'QROC') returning id`, [a.id, d.id]);
+    await en(ids.prof, `insert into corrections (question_id, reponses_qroc) values ($1, '{ECG}')`, [x.id]);
+    await en(ids.camille, 'select commencer_epreuve($1)', [a.id]);
+    await en(ids.camille, `select enregistrer_reponse($1, $2, '{}', 'ECG', true)`, [a.id, x.id]);
+    // Le groupe A a fini ; le groupe B compose, sa réponse est à moitié tapée.
+    await db.query(`update seances set debut = now() - interval '3 hours', fin = now() - interval '3 minutes' where id = $1`, [a.id]);
+    await en(ids.leo, 'select commencer_epreuve($1)', [b.id]);
+    await en(ids.leo, `select enregistrer_reponse($1, $2, '{}', 'radio du th', false)`, [b.id, x.id]);
+    expect(Number((await en(ids.camille, 'select note20 from mon_resultat($1)', [a.id]))[0].note20)).toBe(20);
+    expect((await en(ids.camille, 'select qroc_en_cours from infos_qcm($1)', [a.id]))[0].qroc_en_cours).toBe(false);
+    // Le groupe B a fini : sa réponse attend la correction de l'équipe, les notes sont en attente.
+    await db.query(`update seances set debut = now() - interval '3 hours', fin = now() - interval '3 minutes' where id = $1`, [b.id]);
+    expect(await en(ids.camille, 'select * from mon_resultat($1)', [a.id])).toEqual([]);
+    expect((await en(ids.camille, 'select qroc_en_cours from infos_qcm($1)', [a.id]))[0].qroc_en_cours).toBe(true);
+    await db.query('delete from copies where seance_id in ($1, $2)', [a.id, b.id]);
+    await en(ids.prof, 'delete from seances where id = $1', [b.id]);
+    await en(ids.prof, 'delete from seances where id = $1', [a.id]);
+  });
+  it('heure du serveur pour le chronomètre', async () => {
+    const [{ h }] = await en(ids.camille, 'select heure_serveur() as h');
+    expect(Math.abs(new Date(h).getTime() - Date.now())).toBeLessThan(60000);
   });
 });
 
