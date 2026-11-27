@@ -6,7 +6,7 @@ import { serieDe, noterCopie, imagesUtilisees, renommerImages, qrocACorriger } f
 import { corrigerQroc } from '../lib/qroc.js';
 import { QCM_DEMO } from './demo-qcm.js';
 
-const CLE = 'mdepi-demo-v7';
+const CLE = 'mdepi-demo-v8';
 const DEJA_COMMENCE = 'Des étudiants ont déjà commencé cette épreuve : on ne peut plus ajouter ni retirer de question (les corrections restent modifiables).';
 export const CODE_DEMO = '123456';
 
@@ -35,6 +35,19 @@ const REPONSES_QROC_DEMO = {
   DEMO_KFP2_Q2: ['Diverticulite', 'diveticulite aigue', 'Sigmoïdite', 'diverticulose', 'Diverticulite sigmoïdienne aiguë', 'Colite', 'diverticulite', 'Diverticulites'],
 };
 
+// Date fixe à h:m heure de Paris (hiver, UTC+1).
+const paris = (date, h, m = 0) => new Date(`${date}T${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00+01:00`).toISOString();
+
+// Planning Notion, semaine du 30/11/2026 : [titre, matière, date, salle, promo, groupe].
+const SEMAINE_30_11 = [
+  ['Conf Uro', 'Urologie', '2026-11-30', '90 rue Sainte-Cécile', 'D3', 'grp-d3-1'],
+  ['Conf Neuro 2', 'Neurologie', '2026-11-30', '94 rue Sainte-Cécile', 'D1', null],
+  ['Conf Réa', 'Anesthésie - Réa', '2026-12-01', '90 rue Sainte-Cécile', 'D3', 'grp-d3-2'],
+  ['Conf Réa', 'Anesthésie - Réa', '2026-12-02', '94 rue Sainte-Cécile', 'D3', 'grp-d3-1'],
+  ['Conf Uro', 'Urologie', '2026-12-02', '90 rue Sainte-Cécile', 'D3', 'grp-d3-2'],
+  ['Conf Réa', 'Anesthésie - Réa', '2026-12-03', '94 rue Sainte-Cécile', 'D2', 'grp-d2-cardpneu'],
+];
+
 function donneesInitiales() {
   const gA = 'grp-d2-a';
   const gB = 'grp-d2-b';
@@ -42,6 +55,8 @@ function donneesInitiales() {
     { id: gA, promo: 'D2', nom: 'Groupe A' },
     { id: gB, promo: 'D2', nom: 'Groupe B' },
     { id: 'grp-d3-1', promo: 'D3', nom: 'Groupe 1' },
+    { id: 'grp-d3-2', promo: 'D3', nom: 'Groupe 2' },
+    { id: 'grp-d2-cardpneu', promo: 'D2', nom: 'Rota Card/Pneu' },
   ];
   const inscrits = [
     { email: 'camille.martin@exemple.fr', prenom: 'Camille', nom: 'Martin', role: 'etudiant', promo: 'D2', groupe_id: gA, actif: true },
@@ -115,6 +130,11 @@ function donneesInitiales() {
     }),
     s('Sémiologie cardiaque', 'Cardiologie', jour(3, 18, 30), jour(3, 20, 30), '90 rue Sainte-Cécile', { promos: ['D1'] }),
     s('Gynécologie : grossesse extra-utérine', 'Gynécologie Obstétrique', jour(2, 18, 30), jour(2, 21, 30), '94 rue Sainte-Cécile', { promos: ['D4'] }),
+    // Vraie semaine du 30/11/2026, reprise du planning Notion de la MDEPi
+    // (page « Semaine du 30/11 » et base « Conférences »). Compo 18h45-20h15.
+    ...SEMAINE_30_11.map(([titre, matiere, date, lieu, promo, groupe]) =>
+      s(titre, matiere, paris(date, 18, 45), paris(date, 20, 15), lieu, { epreuve: true, zoom_url: null, promos: [promo], groupes: groupe ? [groupe] : [] })
+    ),
     // QCM rangés directement dans Entraînement (hors planning).
     s("QCM d'entraînement · cholestase", 'Gastro-entérologie', jour(-4, 8), jour(-4, 10), 'En ligne', { epreuve: true, zoom_url: null, categorie: 'entrainement' }),
     s('QCM coaching · méthode des DP', 'Transversale', jour(-1, 8), jour(-1, 10), 'En ligne', { epreuve: true, zoom_url: null, categorie: 'coaching' }),
@@ -123,6 +143,11 @@ function donneesInitiales() {
   // CCB n°3 : même épreuve pour les groupes A et B (une série, un classement).
   const [ccb3A, ccb3B] = seances.filter((x) => x.titre.startsWith('CCB n°3'));
   ccb3B.serie = ccb3A.id;
+  // Semaine du 30/11 : G1 et G2 passent la même épreuve D3 (un seul classement).
+  for (const titre of ['Conf Uro', 'Conf Réa']) {
+    const [g1, ...autres] = seances.filter((x) => x.titre === titre && x.promos[0] === 'D3');
+    for (const x of autres) x.serie = g1.id;
+  }
   // Partiel blanc : le groupe A l'a passé, le groupe B le passe dans deux jours.
   const [partielA, partielB] = seances.filter((x) => x.titre.startsWith('Partiel blanc'));
   partielB.serie = partielA.id;
