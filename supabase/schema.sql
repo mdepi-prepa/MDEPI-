@@ -860,9 +860,10 @@ create policy qcm_images_lecture on storage.objects for select to authenticated
   using (bucket_id = 'documents' and (storage.foldername(name))[1] = 'qcm'
          and public.peut_voir_sujet(((storage.foldername(name))[2])::uuid));
 
--- PDF d'une épreuve : le sujet est visible des étudiants concernés dès le début
--- de leur épreuve, le support dès sa fin (délai de grâce compris), la correction
--- quand les résultats sont publiés (ou si l'équipe la publie).
+-- PDF d'une épreuve : le support (et un ancien « sujet », affiché lui aussi
+-- comme support) dès la fin de l'épreuve, délai de grâce compris : pendant
+-- l'épreuve, il dévoilerait la suite des dossiers progressifs. Les anciennes
+-- diapos de correction : quand les résultats sont publiés (ou si l'équipe la publie).
 -- Les documents des autres séances : dès que la séance est visible.
 create or replace function public.peut_voir_document(p_seance uuid, p_type text)
 returns boolean language sql stable security definer set search_path = public as $$
@@ -870,8 +871,7 @@ returns boolean language sql stable security definer set search_path = public as
     select 1 from public.seances s
     where s.id = p_seance and public.peut_voir_seance(s)
       and (not s.epreuve or s.correction_publiee or public.resultats_publies(s)
-           or (p_type = 'support' and public.epreuve_finie(s))
-           or (p_type = 'sujet' and now() >= s.debut)))
+           or (p_type in ('support', 'sujet') and public.epreuve_finie(s))))
 $$;
 drop policy if exists documents_lecture on public.documents;
 create policy documents_lecture on public.documents for select to authenticated

@@ -335,7 +335,7 @@ export function creerBackendDemo() {
       // Même règle que peut_voir_document (schema.sql).
       const visible = (d) =>
         estEquipe(profil()) || !s.epreuve || s.correction_publiee || publies(s) ||
-        (d.type === 'support' && finie(s)) || (d.type === 'sujet' && new Date(s.debut) <= new Date());
+        ((d.type === 'support' || d.type === 'sujet') && finie(s));
       return db.documents.filter((d) => d.seance_id === seanceId && visible(d));
     },
     async urlDocument() {

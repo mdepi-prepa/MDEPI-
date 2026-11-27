@@ -13,9 +13,7 @@ const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 
 const all=(el,n)=>Array.from(el.getElementsByTagNameNS('*',n));
 const one=(el,n)=>el.getElementsByTagNameNS('*',n)[0]||null;
-const kids=(el,n)=>Array.from(el.children).filter(c=>c.localName===n);
 const txt=el=>(el?.textContent||'').replace(/\s+/g,' ').trim();
-const norm=s=>String(s).normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/\s+/g,' ').trim();
 function joinPath(base,href){
  if(/^(https?:|data:)/.test(href))return href;
  const parts=(base.includes('/')?base.slice(0,base.lastIndexOf('/')+1):'')+href;

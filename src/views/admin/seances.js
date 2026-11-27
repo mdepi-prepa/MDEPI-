@@ -164,10 +164,10 @@ export async function vueAdminSeance(app, { id, copie, epreuve }) {
     form.matiere.addEventListener('change', () => {
       champMatiere.hidden = form.matiere.value !== '__autre';
       form.matiere_autre.required = !champMatiere.hidden;
-    const champCategorie = form.querySelector('[data-categorie]');
-    form.epreuve.addEventListener('change', () => (champCategorie.hidden = !form.epreuve.checked));
       if (!champMatiere.hidden) form.matiere_autre.focus();
     });
+    const champCategorie = form.querySelector('[data-categorie]');
+    form.epreuve.addEventListener('change', () => (champCategorie.hidden = !form.epreuve.checked));
     form.matiere_autre.required = !champMatiere.hidden;
 
     form.addEventListener('submit', async (e) => {

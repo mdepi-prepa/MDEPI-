@@ -14,7 +14,6 @@ export async function vueAdminComptes(app) {
   const [inscrits, groupes] = await Promise.all([app.api.inscrits(), app.api.groupes()]);
   const filtre = sessionStorageGet('filtre-promo') || 'tous';
   const liste = inscrits.filter((i) => filtre === 'tous' || (filtre === 'equipe' ? i.role !== 'etudiant' : i.promo === filtre));
-  const nomGroupe = (id) => groupes.find((g) => g.id === id)?.nom ?? '';
   const compte = (code) => inscrits.filter((i) => i.promo === code && i.actif && i.role === 'etudiant').length;
 
   const vue = html`<div class="page">

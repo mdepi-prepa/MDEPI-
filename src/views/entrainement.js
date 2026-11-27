@@ -1,16 +1,16 @@
 // Entraînement, en trois onglets :
-// - Conférences annuelles : les épreuves terminées, rejouées dans les mêmes
-//   conditions que l'épreuve (durée, questions validées une à une, correction
-//   à la fin) ;
+// - Conférences annuelles : les épreuves terminées, rejouées sur le même écran
+//   que l'épreuve (questions validées une à une, correction à la fin), sans
+//   limite de temps ;
 // - QCM d'entraînement et QCM coaching : QCM rangés là par l'équipe
 //   (back-office, « Onglet dans Entraînement »), corrigés après chaque question.
 // Hors classement ; chaque tentative est gardée (score, réponses) pour Progrès.
 import { html, brut } from '../lib/html.js';
 import { icones } from '../lib/icones.js';
 import { dateCourte } from '../lib/dates.js';
-import { points, formatNote, noteSur20 } from '../lib/bareme.js';
+import { pointsPonderes, coefficient, formatNote, noteSur20 } from '../lib/bareme.js';
 import { serieDe, aPlat, lettre, htmlQcm, chargerImages, LIBELLES_TYPES, noterCopie, CATEGORIES, categorieDe } from '../lib/qcm.js';
-import { ancrerQuestion, enTete, stylePromo, vide } from './commun.js';
+import { ancrerQuestion, enTete, stylePromo } from './commun.js';
 import { questionCorrigee, sommaireCopie } from './qcm-rendu.js';
 
 const CLE_ONGLET = 'mdepi-entrainement-onglet';
@@ -89,7 +89,7 @@ export async function vueEntrainement(app) {
   };
   const matieresDe = (cat) => [...new Set(liste.filter((x) => categorieDe(x.s) === cat).map((x) => x.s.matiere).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'fr'));
   const AIDES = {
-    conference: "Rejouez les conférences terminées dans les mêmes conditions que l'épreuve : même durée, questions validées une à une, correction à la fin. Hors classement.",
+    conference: "Rejouez les conférences terminées sur le même écran que l'épreuve, sans limite de temps : questions validées une à une, correction à la fin. Hors classement.",
     entrainement: 'QCM pour vous entraîner, avec la correction après chaque question. Hors classement.',
     coaching: 'QCM du coaching, avec la correction après chaque question. Hors classement.',
   };
@@ -170,13 +170,13 @@ export async function vueRejouer(app, { id }) {
   if (!s || !toutes.length || !Object.keys(corrections).length) {
     return { html: html`<div class="page">${enTete('Entraînement', null, '#/entrainement')}<p>Cette épreuve n'est pas encore disponible en entraînement.</p></div>` };
   }
-  // Conférence annuelle : mêmes conditions que l'épreuve (durée, questions
-  // validées une à une sans correction, correction complète à la fin).
+  // Conférence annuelle : même écran que l'épreuve (questions validées une à
+  // une sans correction, correction complète à la fin), sans chrono.
   const examen = categorieDe(s) === 'conference';
   // Questions ratées : dernière tentative d'entraînement, sinon la copie de l'épreuve.
   const derniere = tentatives.find((e) => e.serie_id === serieDe(s));
   const source = derniere?.reponses || copie?.reponses;
-  const ratees = source ? toutes.filter((q) => points(q, corrections[q.id], source[q.id]) < 1) : [];
+  const ratees = source ? toutes.filter((q) => coefficient(q) > 0 && pointsPonderes(q, corrections[q.id], source[q.id]) < coefficient(q)) : [];
 
   const vue = html`<div class="page">
     ${enTete('Entraînement', null, '#/entrainement')}
@@ -212,15 +212,11 @@ export async function vueRejouer(app, { id }) {
       const prec = questions[k - 1];
       return !prec || prec.di !== q.di || repE(prec).validee;
     };
-    const quitterPassage = () => {
-      document.body.classList.remove('mode-epreuve');
-      
-    };
+    const quitterPassage = () => document.body.classList.remove('mode-epreuve');
     window.addEventListener('hashchange', quitterPassage, { once: true });
 
     const demarrerPassage = (depuis = 0) => {
       document.body.classList.add('mode-epreuve');
-      
       courant = 0;
       zone.innerHTML = String(html`<div class="passage">
         <header class="passage-haut">
@@ -414,9 +410,7 @@ export async function vueRejouer(app, { id }) {
               )}</fieldset>`}
         </div>
         <p class="alerte attention" data-vide hidden>Vous n'avez rien répondu. Cliquez à nouveau pour valider sans réponse.</p>
-        <div class="actions passage-actions">${examen
-          ? html`<button class="btn plein" data-action="valider">${i + 1 < questions.length ? (questions[i + 1].di === q.di ? 'Valider et passer à la suite' : 'Valider la question') : "Valider et terminer l'épreuve"}</button>`
-          : html`<button class="btn plein" data-action="verifier">Vérifier ma réponse</button>`}</div>
+        <div class="actions passage-actions"><button class="btn plein" data-action="verifier">Vérifier ma réponse</button></div>
       </section>`);
       chargerImages(zone, app.api);
       window.scrollTo(0, 0);
@@ -487,20 +481,18 @@ export async function vueRejouer(app, { id }) {
       window.scrollTo(0, 0);
     };
 
-    // Chaque case cochée ou réponse tapée est gardée sur l'appareil.
-    el.addEventListener('change', () => {
-      if (!questions.length) return;
-      if (examen) lireE();
-      else if (!verifiee) lire();
-      sauver();
-    });
-    // QRP : pas plus de n cases.
+    // Chaque case cochée ou réponse tapée est gardée sur l'appareil
+    // (QRP : pas plus de n cases, vérifié avant d'enregistrer).
     el.addEventListener('change', (e) => {
+      if (!questions.length) return;
       const q = examen ? questions[courant] : questions[i];
       if (e.target.name === 'p' && q?.type === 'QRP' && e.target.checked && zone.querySelectorAll('input[name=p]:checked').length > (q.nb_reponses || 99)) {
         e.target.checked = false;
         app.message(`${q.nb_reponses} réponses attendues : décochez une case avant d'en cocher une autre.`, 'erreur');
       }
+      if (examen) lireE();
+      else if (!verifiee) lire();
+      sauver();
     });
     el.addEventListener('click', (e) => {
       if (e.target.matches('[data-resume]')) e.target.hidden = true;

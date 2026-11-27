@@ -15,6 +15,8 @@ import { ancrerQuestion, enTete } from './commun.js';
 import { bandeauNote, qcmCorrige } from './qcm-rendu.js';
 
 const HORS_LIGNE = 'Pas de connexion internet.';
+// Erreur de réseau (à réessayer), par opposition à un refus de la base.
+const erreurReseau = (err) => err.message === HORS_LIGNE || /fetch|network|injoignable/i.test(err.message);
 
 export function chrono(ms) {
   if (ms <= 0) return '0:00';
@@ -205,7 +207,7 @@ async function passage(app, s, copie) {
             await app.api.enregistrerReponse(s.id, qid, r.choix, r.texte, r.valider);
             if (attente[qid] === r) delete attente[qid]; // sinon modifiée entre-temps : renvoyée au tour suivant
           } catch (err) {
-            if (err.message === HORS_LIGNE || /fetch|network/i.test(err.message)) throw err;
+            if (erreurReseau(err)) throw err;
             delete attente[qid]; // refus définitif (question déjà validée, épreuve fermée…)
             app.message(err.message, 'erreur');
             if (/fermée|rendue/i.test(err.message)) {
@@ -375,13 +377,17 @@ async function passage(app, s, copie) {
           try {
             await app.api.enregistrerReponse(s.id, qid, r.choix, r.texte, r.valider);
           } catch (err) {
-            if (err.message === HORS_LIGNE) throw err;
+            if (erreurReseau(err)) throw err;
           }
           delete attente[qid];
         }
         fini = true;
         await app.api.rendreCopie(s.id).catch(() => {});
-        localStorage.removeItem(cleLocale);
+        try {
+          localStorage.removeItem(cleLocale);
+        } catch {
+          /* stockage indisponible */
+        }
         app.message(auto ? "Temps écoulé : votre copie a été envoyée." : 'Copie envoyée.');
         nettoyer();
         app.rafraichir();
