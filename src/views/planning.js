@@ -18,7 +18,8 @@ export async function vuePlanning(app, { onglet = 'avenir' } = {}) {
   const docs = onglet === 'replays'
     ? await Promise.all(passees.map((s) => app.api.documents(s.id).catch(() => [])))
     : [];
-  const supportsDe = new Map(passees.map((s, i) => [s.id, (docs[i] || []).filter((d) => d.type === 'support')]));
+  // Support et diapos de correction : les deux servent de support après la séance.
+  const supportsDe = new Map(passees.map((s, i) => [s.id, (docs[i] || []).filter((d) => d.type === 'support' || d.type === 'correction')]));
 
   const selecteur = html`<div class="segments" role="tablist">
     <a role="tab" href="#/planning" class="segment${onglet === 'avenir' ? ' actif' : ''}" aria-selected="${onglet === 'avenir'}">À venir</a>
@@ -30,6 +31,13 @@ export async function vuePlanning(app, { onglet = 'avenir' } = {}) {
         (g) => html`<section class="pile-petite"><h2 class="surtitre">${g.mois}</h2>${g.elements.map(ligneSeance)}</section>`
       )
     : vide('Aucune séance à venir.');
+
+  // « Support », « Correction », ou numérotés s'il y en a plusieurs du même type.
+  const libelleDoc = (d, liste) => {
+    const nom = d.type === 'correction' ? 'Correction' : 'Support';
+    const memes = liste.filter((x) => x.type === d.type);
+    return memes.length > 1 ? `${nom} ${memes.indexOf(d) + 1}` : nom;
+  };
 
   const cartePassee = (s) => {
     const replay = urlSure(s.replay_url);
@@ -44,7 +52,7 @@ export async function vuePlanning(app, { onglet = 'avenir' } = {}) {
           ? html`<a class="btn plein" href="${replay}" target="_blank" rel="noopener">${icones.lecture(16)} Replay Zoom</a>`
           : html`<span class="btn inactif">${icones.video(16)} Replay à venir</span>`}
         ${supports.map(
-          (d, i) => html`<button class="btn contour" data-doc="${d.chemin}" title="${d.titre}">${icones.fichier(16)} ${supports.length > 1 ? `Support ${i + 1}` : 'Support'}</button>`
+          (d) => html`<button class="btn contour" data-doc="${d.chemin}" title="${d.titre}">${icones.fichier(16)} ${libelleDoc(d, supports)}</button>`
         )}
         ${!supports.length ? html`<span class="btn inactif">${icones.fichier(16)} Support à venir</span>` : ''}
         ${s.epreuve ? html`<a class="btn contour" href="#/seance/${s.id}">${icones.epreuve(16)} Voir l'épreuve</a>` : ''}
