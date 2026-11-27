@@ -236,6 +236,10 @@ export function creerBackendSupabase(url, cleAnon) {
       const s = await this.seance(seanceId);
       return verifier(await sb.from('entrainements').insert({ serie_id: serieDe(s), reponses, points, total }).select().single());
     },
+    async moyennesEpreuve(seanceId) {
+      const rows = verifier(await sb.rpc('moyennes_epreuve', { p_seance: seanceId }));
+      return rows.map((r) => ({ ...r, moyenne: Number(r.moyenne) }));
+    },
     async resultatsEpreuve(seanceId) {
       const rows = verifier(await sb.rpc('resultats_epreuve', { p_seance: seanceId }));
       return rows.map((r) => ({ ...r, points: Number(r.points), note20: Number(r.note20) }));

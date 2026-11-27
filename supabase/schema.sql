@@ -757,6 +757,32 @@ begin
 end;
 $$;
 
+-- Moyennes d'une épreuve par promo (groupe_id vide) et par groupe de rotation.
+-- Équipe : toujours ; étudiant : aux mêmes conditions que sa note (résultats
+-- publiés, QROC corrigées). Seulement des moyennes, jamais de nom.
+create or replace function public.moyennes_epreuve(p_seance uuid)
+returns table (promo text, groupe_id uuid, groupe text, moyenne numeric, effectif integer)
+language plpgsql stable security definer set search_path = public as $$
+#variable_conflict use_column
+declare s public.seances;
+begin
+  select * into s from public.seances where id = p_seance;
+  if not found or not public.peut_voir_seance(s) then return; end if;
+  if not public.est_equipe() and (not public.resultats_publies(s) or public.qroc_a_corriger(public.serie_de(s)) > 0) then return; end if;
+  return query
+  with t as (
+    select p.promo, p.groupe_id, g.nom as groupe, n.note20 from public.copies c
+    join public.seances x on x.id = c.seance_id and public.serie_de(x) = public.serie_de(s) and public.epreuve_finie(x) and not x.annulee
+    join public.profils p on p.id = c.user_id
+    left join public.groupes g on g.id = p.groupe_id
+    cross join lateral public.note_copie(c.id) n)
+  select t.promo, null::uuid, null::text, round(avg(t.note20), 2), count(*)::integer from t group by t.promo
+  union all
+  select t.promo, t.groupe_id, t.groupe, round(avg(t.note20), 2), count(*)::integer from t where t.groupe_id is not null group by t.promo, t.groupe_id, t.groupe
+  order by 1, 3 nulls first;
+end;
+$$;
+
 -- Résultats de toute la série (équipe).
 create or replace function public.resultats_epreuve(p_seance uuid)
 returns table (seance_id uuid, user_id uuid, email text, prenom text, nom text, groupe text,

@@ -23,6 +23,7 @@ import { vuePassage, vueMaCorrection } from './views/passage.js';
 import { vueEntrainement, vueRejouer } from './views/entrainement.js';
 import { vueAdminQcm, vueAdminCorrige, vueAdminResultats, vueAdminCopie, vueAdminQroc } from './views/admin/qcm.js';
 import { vueAdminSaisie } from './views/admin/saisie.js';
+import { vueProgres } from './views/progres.js';
 
 // Table des écrans : #/chemin → fonction d'affichage.
 const ROUTES = [
@@ -37,7 +38,7 @@ const ROUTES = [
   ['entrainement', vueEntrainement],
   ['entrainement/:id', vueRejouer],
   ['cartes', (app) => vueBientot(app, 'Cartes')],
-  ['progres', (app) => vueBientot(app, 'Progrès')],
+  ['progres', vueProgres],
   ['profil', vueProfil],
   ['admin', vueAdmin, 'equipe'],
   ['admin/comptes', vueAdminComptes, 'admin'],

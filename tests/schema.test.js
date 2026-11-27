@@ -260,6 +260,10 @@ describe('QCM des épreuves', () => {
     [r] = await en(ids.camille, 'select * from mon_resultat($1)', [q.e]);
     expect([Number(r.note20), r.rang, r.effectif, Number(r.moyenne), r.groupes_restants]).toEqual([15, 2, 2, 17.5, 0]);
     expect((await en(ids.leo, 'select rang from mon_resultat($1)', [q.e2]))[0].rang).toBe(1);
+    // Moyennes par promo et par groupe (sans nom) : D2 = 17,5 ; groupe A = 15 ; groupe B = 20.
+    const moy = await en(ids.camille, 'select promo, groupe, moyenne, effectif from moyennes_epreuve($1)', [q.e]);
+    expect(moy.map((m) => [m.promo, m.groupe, Number(m.moyenne), m.effectif])).toEqual([['D2', null, 17.5, 2], ['D2', 'A', 15, 1], ['D2', 'B', 20, 1]]);
+    expect(await en(ids.ines, 'select * from moyennes_epreuve($1)', [q.e])).toEqual([]);
     // Le groupe B a fini : correction visible pour lui aussi, entraînement possible.
     expect((await en(ids.leo, 'select * from corrections')).length).toBe(2);
     expect((await en(ids.camille, 'select correction_visible from infos_qcm($1)', [q.e]))[0].correction_visible).toBe(true);

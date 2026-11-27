@@ -550,6 +550,24 @@ export function creerBackendDemo() {
       sauver();
       return e;
     },
+    async moyennesEpreuve(seanceId) {
+      const s = await this.seance(seanceId);
+      if (!s) return [];
+      if (!estEquipe(profil()) && (!publies(s) || qrocEnAttente(serieDe(s)) > 0)) return [];
+      const notes = notesSerie(serieDe(s), true).map((n) => ({ ...n, i: db.inscrits.find((x) => x.email === n.user_id) || {} }));
+      const moy = (l) => Math.round((100 * l.reduce((a, n) => a + n.note20, 0)) / l.length) / 100;
+      const lignes = [];
+      for (const promo of [...new Set(notes.map((n) => n.i.promo).filter(Boolean))].sort()) {
+        const dp = notes.filter((n) => n.i.promo === promo);
+        lignes.push({ promo, groupe_id: null, groupe: null, moyenne: moy(dp), effectif: dp.length });
+        const nomG = (gid) => db.groupes.find((g) => g.id === gid)?.nom || '';
+        for (const gid of [...new Set(dp.map((n) => n.i.groupe_id).filter(Boolean))].sort((a, b) => nomG(a).localeCompare(nomG(b), 'fr'))) {
+          const dg = dp.filter((n) => n.i.groupe_id === gid);
+          lignes.push({ promo, groupe_id: gid, groupe: db.groupes.find((g) => g.id === gid)?.nom || '', moyenne: moy(dg), effectif: dg.length });
+        }
+      }
+      return lignes;
+    },
     async resultatsEpreuve(seanceId) {
       exiger(estEquipe);
       const s = db.seances.find((x) => x.id === seanceId);
