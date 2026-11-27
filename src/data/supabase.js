@@ -65,15 +65,24 @@ export function creerBackendSupabase(url, cleAnon) {
       const s = await this.seance(seanceId);
       if (!s) return [];
       const serie = serieDe(s);
-      const [dossiers, questions] = await Promise.all([
+      const [dossiers, plan, questions] = await Promise.all([
         sb.from('dossiers').select('*').eq('serie_id', serie).order('ordre'),
+        sb.rpc('plan_qcm', { p_seance: seanceId }),
         sb.from('questions').select('*').eq('serie_id', serie).order('ordre'),
       ]).then((r) => r.map(verifier));
-      return dossiers.map((d) => ({ ...d, questions: questions.filter((q) => q.dossier_id === d.id) }));
+      // Dossier progressif : la base ne donne le contenu d'une question qu'une fois
+      // la précédente validée. Les autres restent numérotées, « verrouillées ».
+      const parId = new Map(questions.map((q) => [q.id, q]));
+      const toutes = plan.map((p) => parId.get(p.id) || { ...p, serie_id: serie, type: '', enonce: '', propositions: [], verrouillee: true });
+      return dossiers.map((d) => ({ ...d, questions: toutes.filter((q) => q.dossier_id === d.id) }));
+    },
+    // Une question d'une épreuve, dès qu'elle est accessible (null sinon).
+    async question(seanceId, questionId) {
+      return verifier(await sb.from('questions').select('*').eq('id', questionId).maybeSingle());
     },
     async infosQcm(seanceId) {
       const [r] = verifier(await sb.rpc('infos_qcm', { p_seance: seanceId }));
-      return r || { questions: 0, dossiers: 0, correction_visible: false, groupes_restants: 0 };
+      return r || { questions: 0, dossiers: 0, correction_visible: false, groupes_restants: 0, resultats_publies: false, publication: 'cloture', publication_le: null, qroc_en_cours: false };
     },
     // Bonnes réponses : visibles par l'équipe, et par les étudiants une fois la correction publiée.
     async corrections(seanceId) {
@@ -112,7 +121,7 @@ export function creerBackendSupabase(url, cleAnon) {
         );
         const qs = verifier(
           await sb.from('questions').insert(
-            d.questions.map((q, qi) => ({ serie_id: serie, dossier_id: enreg.id, qti_id: q.qti_id, ordre: di * 1000 + qi, type: q.type, enonce: q.enonce, propositions: q.propositions }))
+            d.questions.map((q, qi) => ({ serie_id: serie, dossier_id: enreg.id, qti_id: q.qti_id, ordre: di * 1000 + qi, type: q.type, enonce: q.enonce, propositions: q.propositions, nb_reponses: q.nb_reponses || null, coefficient: q.coefficient || 1 }))
           ).select('id, qti_id')
         );
         verifier(
@@ -127,6 +136,15 @@ export function creerBackendSupabase(url, cleAnon) {
     },
     async modifierCorrection(questionId, champs) {
       verifier(await sb.from('corrections').update(champs).eq('question_id', questionId));
+    },
+    // Type (QRM/QRP), nombre de réponses attendues, coefficient, statut (neutralisée, annulée).
+    async modifierQuestion(questionId, champs) {
+      verifier(await sb.from('questions').update(champs).eq('id', questionId));
+    },
+    // Publication des résultats pour toute la série : 'jamais' | 'cloture' | 'date'.
+    async choisirPublication(seanceId, publication, publicationLe) {
+      const ids = (await this.seancesSerie(seanceId)).map((x) => x.id);
+      verifier(await sb.from('seances').update({ publication, publication_le: publication === 'date' ? publicationLe : null }).in('id', ids));
     },
     async publierCorrection(seanceId, publiee) {
       const ids = (await this.seancesSerie(seanceId)).map((x) => x.id);
@@ -252,7 +270,7 @@ function traduireErreur(e) {
   if (/rate limit|too many/i.test(m)) return 'Trop de tentatives. Réessayez dans quelques minutes.';
   if (/Password should be/i.test(m)) return 'Mot de passe trop court (8 caractères minimum).';
   if (/row-level security/i.test(m)) return "Vous n'avez pas les droits pour cette action.";
-  for (const t of ['Épreuve fermée', 'Copie déjà rendue', 'Question déjà validée', 'Copie introuvable', 'Épreuve introuvable', "Réservé à l'équipe"]) if (m.includes(t)) return t + '.';
+  for (const t of ['Question pas encore accessible', 'Épreuve fermée', 'Copie déjà rendue', 'Question déjà validée', 'Copie introuvable', 'Épreuve introuvable', "Réservé à l'équipe"]) if (m.includes(t)) return t + '.';
   if (/Failed to fetch|NetworkError/i.test(m)) return 'Pas de connexion internet.';
   return m;
 }

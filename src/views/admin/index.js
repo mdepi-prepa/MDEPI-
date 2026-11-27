@@ -26,7 +26,6 @@ export async function vueAdmin(app) {
         ${admin ? tuile('#/admin/comptes', icones.reglages(18), 'Comptes', 'Importer les inscrits (CSV), promos, groupes de rotation, passage d’année.') : ''}
         ${admin ? tuile('#/admin/annonces', icones.cloche(18), 'Annonces', 'Publier une annonce pour une ou plusieurs promos.') : ''}
       </div>
-      <p class="aide">Import des QCM Théia, cartes, passage et correction des épreuves dans l'app : lot 1.1.</p>
     </div>`,
   };
 }
