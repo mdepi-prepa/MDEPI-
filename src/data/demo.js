@@ -216,6 +216,14 @@ export function creerBackendDemo() {
   // Même règle que peut_voir_correction (schema.sql) : dès la fin de sa propre séance, ou publication anticipée.
   const groupesRestants = (serie) => db.seances.filter((x) => serieDe(x) === serie && !x.annulee && new Date(x.fin) > new Date()).length;
   const voirCorrection = (serie) => serieVisible(serie, (x) => !x.annulee && (x.correction_publiee || new Date(x.fin) <= new Date()));
+  // Même règle que question_accessible (schema.sql) : dossier progressif.
+  const questionAccessible = (q) => {
+    if (estEquipe(profil()) || voirCorrection(q.serie_id)) return true;
+    const prec = db.questions.filter((x) => x.dossier_id === q.dossier_id && x.ordre < q.ordre).sort((a, b) => b.ordre - a.ordre)[0];
+    if (!prec) return true;
+    const ids = new Set(db.seances.filter((x) => serieDe(x) === q.serie_id).map((x) => x.id));
+    return db.copies.some((c) => ids.has(c.seance_id) && c.user_id === db.session && c.reponses[prec.id]?.validee);
+  };
   const notesSerie = (serie, finies = false) => {
     const ids = new Set(db.seances.filter((x) => serieDe(x) === serie && (!finies || new Date(x.fin) <= new Date())).map((x) => x.id));
     const questions = db.questions.filter((q) => q.serie_id === serie);
@@ -298,11 +306,18 @@ export function creerBackendDemo() {
       const s = await this.seance(seanceId);
       if (!s || !voirSujet(serieDe(s))) return [];
       const serie = serieDe(s);
-      const qs = db.questions.filter((q) => q.serie_id === serie).sort((a, b) => a.ordre - b.ordre);
+      const qs = db.questions
+        .filter((q) => q.serie_id === serie)
+        .sort((a, b) => a.ordre - b.ordre)
+        .map((q) => (questionAccessible(q) ? q : { id: q.id, serie_id: q.serie_id, dossier_id: q.dossier_id, ordre: q.ordre, type: '', enonce: '', propositions: [], verrouillee: true }));
       return db.dossiers
         .filter((d) => d.serie_id === serie)
         .sort((a, b) => a.ordre - b.ordre)
         .map((d) => ({ ...d, questions: qs.filter((q) => q.dossier_id === d.id) }));
+    },
+    async question(seanceId, questionId) {
+      const q = db.questions.find((x) => x.id === questionId);
+      return q && (await this.seance(seanceId)) && voirSujet(q.serie_id) && questionAccessible(q) ? q : null;
     },
     async infosQcm(seanceId) {
       const s = await this.seance(seanceId);
@@ -389,6 +404,7 @@ export function creerBackendDemo() {
       const q = db.questions.find((x) => x.id === questionId && x.serie_id === serieDe(s));
       if (!q) throw new Error('Question introuvable.');
       if ((choix || []).some((id) => !q.propositions.some((p) => p.id === id))) throw new Error('Proposition inconnue.');
+      if (!questionAccessible(q)) throw new Error('Question pas encore accessible.');
       if (c.reponses[questionId]?.validee) throw new Error('Question déjà validée.');
       c.reponses[questionId] = { question_id: questionId, choix: choix || [], texte: (texte || '').slice(0, 500), validee: !!valider, modifiee_le: new Date().toISOString() };
       sauver();

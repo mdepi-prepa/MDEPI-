@@ -334,6 +334,17 @@ create table if not exists public.reponses (
   primary key (copie_id, question_id)
 );
 
+-- Dossier progressif : pendant l'épreuve, un étudiant ne reçoit une question
+-- qu'une fois la précédente du même dossier validée (comme Théia) ; il ne peut
+-- donc pas lire la suite en avance. Après l'épreuve (correction visible) et
+-- pour l'équipe, tout est lisible.
+create or replace function public.question_precedente(q public.questions)
+returns uuid language sql stable security definer set search_path = public as $$
+  select p.id from public.questions p
+  where p.dossier_id = q.dossier_id and p.ordre < q.ordre
+  order by p.ordre desc limit 1
+$$;
+
 -- Délai de grâce après l'heure de fin (réseau lent, envoi en attente).
 create or replace function public.epreuve_ouverte(s public.seances)
 returns boolean language sql stable as $$
@@ -367,7 +378,31 @@ returns boolean language sql stable security definer set search_path = public as
       and (s.correction_publiee or public.epreuve_finie(s)))
 $$;
 
--- Barème MDEPi (type EDN). QRM : 0 discordance = 1, 1 = 0,5, 2 = 0,2, 3+ = 0.
+create or replace function public.question_accessible(q public.questions)
+returns boolean language sql stable security definer set search_path = public as $$
+  select public.est_equipe() or public.peut_voir_correction(q.serie_id) or (
+    public.peut_voir_sujet(q.serie_id) and (
+      public.question_precedente(q) is null or exists (
+        select 1 from public.reponses r
+        join public.copies c on c.id = r.copie_id
+        join public.seances s on s.id = c.seance_id
+        where r.question_id = public.question_precedente(q) and r.validee
+          and c.user_id = auth.uid() and public.serie_de(s) = q.serie_id)))
+$$;
+
+-- Plan du QCM (identifiants et ordre des questions, sans leur contenu) pour
+-- numéroter toutes les questions, y compris celles pas encore accessibles.
+create or replace function public.plan_qcm(p_seance uuid)
+returns table (id uuid, dossier_id uuid, ordre integer)
+language sql stable security definer set search_path = public as $$
+  select q.id, q.dossier_id, q.ordre
+  from public.seances s join public.questions q on q.serie_id = public.serie_de(s)
+  where s.id = p_seance and public.peut_voir_seance(s) and public.peut_voir_sujet(public.serie_de(s))
+  order by q.ordre
+$$;
+
+-- Barème MDEPi (type EDN). QRM : 0 discordance = 1, 1 = 0,5, 2 = 0,2, 3+ = 0 ;
+-- une QRM sans aucune case cochée vaut 0 (décision de l'équipe, 27/11/2026).
 -- QRU : 1 si la bonne réponse seule est cochée. QROC : 1 si la réponse correspond
 -- à une réponse acceptée (correction automatique tolérante, voir qroc_juste) et
 -- n'a pas été refusée par l'équipe.
@@ -470,6 +505,7 @@ begin
   if p_type = 'QROC' then
     return case when public.qroc_juste(p_texte, p_qroc, p_refus) then 1 else 0 end;
   end if;
+  if cardinality(coalesce(p_choix, '{}')) = 0 then return 0; end if;
   select count(*) into d from jsonb_array_elements(p_propositions) p
    where ((p->>'id') = any (coalesce(p_choix, '{}'))) <> ((p->>'id') = any (p_bonnes));
   if p_type = 'QRU' then return case when d = 0 then 1 else 0 end; end if;
@@ -533,6 +569,7 @@ begin
   if not public.epreuve_ouverte(s) then raise exception 'Épreuve fermée'; end if;
   select * into q from public.questions where id = p_question and serie_id = public.serie_de(s);
   if q.id is null then raise exception 'Question introuvable'; end if;
+  if not public.question_accessible(q) then raise exception 'Question pas encore accessible'; end if;
   if exists (select 1 from unnest(coalesce(p_choix, '{}')) x where not exists (
       select 1 from jsonb_array_elements(q.propositions) p where p->>'id' = x)) then
     raise exception 'Proposition inconnue';
@@ -613,7 +650,7 @@ drop policy if exists dossiers_equipe on public.dossiers;
 create policy dossiers_equipe on public.dossiers for all to authenticated using (public.est_equipe()) with check (public.est_equipe());
 
 drop policy if exists questions_lecture on public.questions;
-create policy questions_lecture on public.questions for select to authenticated using (public.peut_voir_sujet(serie_id));
+create policy questions_lecture on public.questions for select to authenticated using (public.question_accessible(questions));
 drop policy if exists questions_equipe on public.questions;
 create policy questions_equipe on public.questions for all to authenticated using (public.est_equipe()) with check (public.est_equipe());
 

@@ -65,11 +65,20 @@ export function creerBackendSupabase(url, cleAnon) {
       const s = await this.seance(seanceId);
       if (!s) return [];
       const serie = serieDe(s);
-      const [dossiers, questions] = await Promise.all([
+      const [dossiers, plan, questions] = await Promise.all([
         sb.from('dossiers').select('*').eq('serie_id', serie).order('ordre'),
+        sb.rpc('plan_qcm', { p_seance: seanceId }),
         sb.from('questions').select('*').eq('serie_id', serie).order('ordre'),
       ]).then((r) => r.map(verifier));
-      return dossiers.map((d) => ({ ...d, questions: questions.filter((q) => q.dossier_id === d.id) }));
+      // Dossier progressif : la base ne donne le contenu d'une question qu'une fois
+      // la précédente validée. Les autres restent numérotées, « verrouillées ».
+      const parId = new Map(questions.map((q) => [q.id, q]));
+      const toutes = plan.map((p) => parId.get(p.id) || { ...p, serie_id: serie, type: '', enonce: '', propositions: [], verrouillee: true });
+      return dossiers.map((d) => ({ ...d, questions: toutes.filter((q) => q.dossier_id === d.id) }));
+    },
+    // Une question d'une épreuve, dès qu'elle est accessible (null sinon).
+    async question(seanceId, questionId) {
+      return verifier(await sb.from('questions').select('*').eq('id', questionId).maybeSingle());
     },
     async infosQcm(seanceId) {
       const [r] = verifier(await sb.rpc('infos_qcm', { p_seance: seanceId }));
@@ -252,7 +261,7 @@ function traduireErreur(e) {
   if (/rate limit|too many/i.test(m)) return 'Trop de tentatives. Réessayez dans quelques minutes.';
   if (/Password should be/i.test(m)) return 'Mot de passe trop court (8 caractères minimum).';
   if (/row-level security/i.test(m)) return "Vous n'avez pas les droits pour cette action.";
-  for (const t of ['Épreuve fermée', 'Copie déjà rendue', 'Question déjà validée', 'Copie introuvable', 'Épreuve introuvable', "Réservé à l'équipe"]) if (m.includes(t)) return t + '.';
+  for (const t of ['Question pas encore accessible', 'Épreuve fermée', 'Copie déjà rendue', 'Question déjà validée', 'Copie introuvable', 'Épreuve introuvable', "Réservé à l'équipe"]) if (m.includes(t)) return t + '.';
   if (/Failed to fetch|NetworkError/i.test(m)) return 'Pas de connexion internet.';
   return m;
 }

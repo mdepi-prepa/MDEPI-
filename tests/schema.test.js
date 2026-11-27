@@ -167,6 +167,20 @@ describe('correction automatique des QROC (même résultat qu’en JavaScript)',
   });
 });
 
+describe('barème', () => {
+  it('QRM : discordances, et 0 si aucune case cochée ; QRU vide : 0', async () => {
+    const props = '[{"id":"A"},{"id":"B"},{"id":"C"},{"id":"D"},{"id":"E"}]';
+    const pts = async (type, bonnes, choix) =>
+      Number((await db.query(`select points($1, $2::jsonb, $3, '{}', $4, '') as p`, [type, props, bonnes, choix])).rows[0].p);
+    expect(await pts('QRM', ['A', 'B'], ['A', 'B'])).toBe(1);
+    expect(await pts('QRM', ['A', 'B'], ['A'])).toBe(0.5);
+    expect(await pts('QRM', ['A', 'B'], ['A', 'C'])).toBe(0.2);
+    expect(await pts('QRM', ['A', 'B'], [])).toBe(0);
+    expect(await pts('QRM', ['A'], null)).toBe(0);
+    expect(await pts('QRU', ['C'], [])).toBe(0);
+  });
+});
+
 describe('QCM des épreuves', () => {
   const q = {};
   it('l’équipe importe un sujet dans une épreuve partagée par deux groupes', async () => {
@@ -181,7 +195,11 @@ describe('QCM des épreuves', () => {
     await en(ids.prof, `insert into corrections (question_id, reponses_qroc) values ($1, '{ECG,électrocardiogramme}')`, [q2.id]);
   });
   it('le sujet n’est visible que des groupes dont l’épreuve a commencé ; les corrections restent cachées', async () => {
-    expect((await en(ids.camille, 'select qti_id from questions order by ordre')).map((r) => r.qti_id)).toEqual(['Q1', 'Q2']);
+    // Dossier progressif : seule la 1re question est lisible ; le plan donne le nombre total.
+    expect((await en(ids.camille, 'select qti_id from questions order by ordre')).map((r) => r.qti_id)).toEqual(['Q1']);
+    expect((await en(ids.camille, 'select id from plan_qcm($1)', [q.e])).map((r) => r.id)).toEqual([q.q1, q.q2]);
+    expect(await en(ids.leo, 'select * from plan_qcm($1)', [q.e2])).toEqual([]);
+    expect((await en(ids.prof, 'select qti_id from questions where serie_id = $1', [q.e])).length).toBe(2);
     expect(await en(ids.leo, 'select * from questions')).toEqual([]);
     expect(await en(ids.leo, 'select * from infos_qcm($1)', [q.e2])).toEqual([{ questions: 2, dossiers: 1, correction_visible: false, groupes_restants: 2 }]);
     expect(await en(ids.ines, 'select * from infos_qcm($1)', [q.e2])).toEqual([]);
@@ -198,8 +216,12 @@ describe('QCM des épreuves', () => {
     expect(c1).toBe(c2); // reprise
     await expect(en(ids.camille, `select enregistrer_reponse($1, $2, '{Z}', '', false)`, [q.e, q.q1])).rejects.toThrow(/inconnue/);
     await en(ids.camille, `select enregistrer_reponse($1, $2, '{A}', '', false)`, [q.e, q.q1]);
+    // Q2 ni lisible ni modifiable tant que Q1 n'est pas validée.
+    await expect(en(ids.camille, `select enregistrer_reponse($1, $2, '{}', 'ECG', true)`, [q.e, q.q2])).rejects.toThrow(/pas encore accessible/);
+    expect((await en(ids.camille, 'select qti_id from questions')).length).toBe(1);
     await en(ids.camille, `select enregistrer_reponse($1, $2, '{A,B,C}', '', true)`, [q.e, q.q1]);
     await expect(en(ids.camille, `select enregistrer_reponse($1, $2, '{A,B}', '', true)`, [q.e, q.q1])).rejects.toThrow(/déjà validée/);
+    expect((await en(ids.camille, 'select qti_id from questions order by ordre')).map((r) => r.qti_id)).toEqual(['Q1', 'Q2']);
     await en(ids.camille, `select enregistrer_reponse($1, $2, '{}', ' Électrocardiogramme ', true)`, [q.e, q.q2]);
     await expect(en(ids.camille, `insert into reponses (copie_id, question_id) values ($1, $2)`, [c1, q.q1])).rejects.toThrow(/permission|row-level/);
     expect((await en(ids.camille, 'select choix, validee from reponses order by modifiee_le')).length).toBe(2);

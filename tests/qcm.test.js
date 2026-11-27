@@ -68,6 +68,9 @@ describe('barème EDN', () => {
     expect(points(qrm, corr, { choix: ['A', 'B', 'C', 'D'] })).toBe(0.2);
     expect(points(qrm, corr, { choix: ['A', 'C'] })).toBe(0);
     expect(points(qrm, corr, null)).toBe(0);
+    // QRM laissée vide : 0, même avec 1 ou 2 bonnes réponses (sinon 0,5 ou 0,2 « gratuits »).
+    expect(points(qrm, { bonnes: ['A', 'B'] }, { choix: [] })).toBe(0);
+    expect(points(qrm, { bonnes: ['A'] }, null)).toBe(0);
     expect(discordances(props, corr.bonnes, ['C'])).toBe(5);
   });
   it('QRU', () => {

@@ -164,7 +164,6 @@ async function passage(app, s, copie) {
     const zoneQ = el.querySelector('[data-question]');
     const zoneNav = el.querySelector('[data-nav]');
     const resume = el.querySelector('[data-resume]');
-    let envoiEnCours = false;
     let fini = false;
     let confirmerVide = false;
 
@@ -173,20 +172,30 @@ async function passage(app, s, copie) {
       statut.textContent = texte;
       statut.className = 'aide ' + classe;
     };
-    async function envoyer() {
-      if (envoiEnCours || fini) return;
-      envoiEnCours = true;
+    // Envoie les réponses en attente, dans l'ordre. Renvoie une promesse que
+    // l'on peut attendre (chargement de la question suivante d'un dossier).
+    let envoi = null;
+    function envoyer() {
+      if (fini) return Promise.resolve();
+      if (!envoi) envoi = vider().finally(() => (envoi = null));
+      return envoi;
+    }
+    async function vider() {
       try {
-        for (const [qid, r] of Object.entries(attente)) {
+        while (Object.keys(attente).length && !fini) {
+          const [qid, r] = Object.entries(attente)[0];
           afficherStatut('Enregistrement…');
           try {
             await app.api.enregistrerReponse(s.id, qid, r.choix, r.texte, r.valider);
-            if (attente[qid] === r) delete attente[qid];
+            if (attente[qid] === r) delete attente[qid]; // sinon modifiée entre-temps : renvoyée au tour suivant
           } catch (err) {
             if (err.message === HORS_LIGNE || /fetch|network/i.test(err.message)) throw err;
             delete attente[qid]; // refus définitif (question déjà validée, épreuve fermée…)
             app.message(err.message, 'erreur');
-            if (/fermée|rendue/i.test(err.message)) return terminer(true);
+            if (/fermée|rendue/i.test(err.message)) {
+              terminer(true);
+              return;
+            }
           }
           garderAttente();
         }
@@ -194,10 +203,18 @@ async function passage(app, s, copie) {
       } catch {
         afficherStatut('Hors ligne : vos réponses sont gardées sur cet appareil', 'attention');
         setTimeout(envoyer, 5000);
-      } finally {
-        envoiEnCours = false;
-        if (Object.keys(attente).length && navigator.onLine !== false && statut.classList.contains('ok')) envoyer();
       }
+    }
+    // Question d'un dossier progressif pas encore reçue : la base ne l'envoie
+    // qu'une fois la précédente validée chez elle, donc on envoie d'abord.
+    async function charger(q) {
+      if (!q.verrouillee) return true;
+      await envoyer();
+      if (Object.keys(attente).length) return false;
+      const c = await app.api.question(s.id, q.id).catch(() => null);
+      if (!c) return false;
+      Object.assign(q, c, { verrouillee: false });
+      return true;
     }
     function noter(q, valider = false) {
       const r = rep(q);
@@ -265,10 +282,20 @@ async function passage(app, s, copie) {
       zoneQ.querySelector('[data-qroc]')?.focus({ preventScroll: true });
     }
 
-    function aller(i) {
+    async function aller(i) {
       if (i < 0 || i >= questions.length || !accessible(questions[i])) return;
       courant = i;
       dessinerNav();
+      if (questions[i].verrouillee) {
+        zoneQ.innerHTML = '<p class="aide">Chargement de la question…</p>';
+        const ok = await charger(questions[i]);
+        if (courant !== i) return;
+        if (!ok) {
+          zoneQ.innerHTML = String(html`<p class="alerte attention">La question suivante s'affichera dès le retour du réseau. Vos réponses sont gardées sur cet appareil.</p>`);
+          window.addEventListener('online', () => courant === i && aller(i), { once: true });
+          return;
+        }
+      }
       dessinerQuestion();
       el.querySelector('.passage-corps').scrollIntoView({ block: 'start' });
     }
@@ -398,8 +425,11 @@ async function passage(app, s, copie) {
     }
     window.addEventListener('hashchange', nettoyer);
 
-    dessinerNav();
-    dessinerQuestion();
+    if (courant >= 0) aller(courant);
+    else {
+      dessinerNav();
+      dessinerQuestion();
+    }
     if (Object.keys(attente).length) envoyer();
   }
 
@@ -419,7 +449,7 @@ export async function vueMaCorrection(app, { id }) {
       <h2 class="titre-seance">${s.titre}</h2>
       <p class="aide">${dateLongue(s.debut)} · copie ${copie?.rendue_le ? `envoyée à ${heure(copie.rendue_le)}` : 'non envoyée'}</p>
       ${bandeauNote(resultat)}
-      <p class="aide">Barème : QRM 1 point sans erreur, 0,5 avec une erreur, 0,2 avec deux ; QRU et QROC 1 point.</p>
+      <p class="aide">Barème : QRM 1 point sans erreur, 0,5 avec une erreur, 0,2 avec deux, 0 sans réponse ; QRU et QROC 1 point.</p>
       <button class="btn contour no-print" onclick="window.print()">${icones.fichier(16)} Imprimer ou enregistrer en PDF</button>
     </section>
     <div class="legende"><span class="v-juste">Juste</span><span class="v-fausse">Fausse (cochée à tort)</span><span class="v-oubliee">Oubliée</span></div>
