@@ -283,7 +283,7 @@ export function creerBackendDemo() {
     },
     async verifierCode(email, code) {
       await pause();
-      if (code.trim() !== CODE_DEMO) throw new Error('Code incorrect ou expiré. Demandez un nouveau code.');
+      if (String(code).replace(/\D/g, '') !== CODE_DEMO) throw new Error('Code incorrect ou expiré. Demandez un nouveau code.');
       db.session = email.trim().toLowerCase();
       sauver();
       notifier('SIGNED_IN');

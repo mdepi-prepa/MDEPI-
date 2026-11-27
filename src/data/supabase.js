@@ -34,7 +34,7 @@ export function creerBackendSupabase(url, cleAnon) {
       verifier(await sb.auth.signInWithOtp({ email: email.trim().toLowerCase(), options: { shouldCreateUser: true } }));
     },
     async verifierCode(email, code) {
-      verifier(await sb.auth.verifyOtp({ email: email.trim().toLowerCase(), token: code.trim(), type: 'email' }));
+      verifier(await sb.auth.verifyOtp({ email: email.trim().toLowerCase(), token: String(code).replace(/\D/g, ''), type: 'email' }));
     },
     async connexionMotDePasse(email, motDePasse) {
       verifier(await sb.auth.signInWithPassword({ email: email.trim().toLowerCase(), password: motDePasse }));

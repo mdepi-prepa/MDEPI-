@@ -1,4 +1,5 @@
-// Écran de connexion : code à 6 chiffres reçu par e-mail, ou mot de passe.
+// Écran de connexion : code reçu par e-mail (6 à 8 chiffres selon le réglage
+// Supabase « OTP Length »), ou mot de passe.
 // Le code est préféré au lien magique : sur iPhone, l'app installée sur
 // l'écran d'accueil ne partage pas sa session avec Safari.
 import { html } from '../lib/html.js';
@@ -17,7 +18,7 @@ export async function vueConnexion(app) {
 
       <form id="f-email" class="pile">
         <h1>Connexion</h1>
-        <p class="aide">Entrez l'adresse e-mail donnée à l'inscription. Vous recevrez un code à 6 chiffres.</p>
+        <p class="aide">Entrez l'adresse e-mail donnée à l'inscription. Vous recevrez un code par e-mail.</p>
         <label class="champ"><span>Adresse e-mail</span>
           <input type="email" name="email" autocomplete="email" required inputmode="email" placeholder="prenom.nom@exemple.fr"></label>
         <button class="btn plein" type="submit">Recevoir un code</button>
@@ -27,8 +28,8 @@ export async function vueConnexion(app) {
       <form id="f-code" class="pile" hidden>
         <h1>Code reçu par e-mail</h1>
         <p class="aide">Code envoyé à <strong data-email></strong>. Il est valable une heure.</p>
-        <label class="champ"><span>Code à 6 chiffres</span>
-          <input name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required placeholder="123456"></label>
+        <label class="champ"><span>Code reçu par e-mail</span>
+          <input name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9 ]{6,9}" maxlength="9" minlength="6" required placeholder="123456"></label>
         <button class="btn plein" type="submit">Se connecter</button>
         <button class="btn lien" type="button" data-action="retour">Changer d'adresse</button>
       </form>
