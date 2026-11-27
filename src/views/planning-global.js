@@ -2,7 +2,8 @@
 // de tous les groupes (intitulé, groupe, salle), pour voir les salles occupées.
 import { html } from '../lib/html.js';
 import { cleJour, plageHoraire, dateLongue } from '../lib/dates.js';
-import { vide } from './commun.js';
+import { vide, etiquettesPromo, stylePromo } from './commun.js';
+import { couleurPromo } from '../lib/promos.js';
 
 const MOIS = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
 const JOURS = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
@@ -65,17 +66,18 @@ export function monterPlanningGlobal(el, app) {
           const k = cle(annee, mois, j);
           const n = (parJour.get(k) || []).length;
           return html`<button class="cal-jour${k === choisi ? ' choisi' : ''}${k === aujourdhui ? ' aujourdhui' : ''}${n ? ' occupe' : ''}" data-jour="${k}"
-            aria-label="${j} ${MOIS[mois]}${n ? `, ${n} épreuve${n > 1 ? 's' : ''}` : ''}" aria-pressed="${k === choisi}">${j}${n ? html`<span class="cal-nb">${n}</span>` : ''}</button>`;
+            aria-label="${j} ${MOIS[mois]}${n ? `, ${n} épreuve${n > 1 ? 's' : ''}` : ''}" aria-pressed="${k === choisi}">${j}${n ? html`<span class="cal-points">${[...new Set((parJour.get(k) || []).flatMap((e) => e.promos || []))].sort().map((p) => html`<i style="background: ${couleurPromo(p)}"></i>`)}</span>` : ''}</button>`;
         })}
       </div>
       <div class="cal-detail">
         <p class="surtitre">${dateLongue(choisi + 'T12:00:00')}</p>
         ${duJour.length
           ? html`<ul class="cal-liste">${duJour.map(
-              (e) => html`<li>
+              (e) => html`<li class="teinte-promo" style="${stylePromo(e.promos || [])}">
                 <span class="cal-heure">${plageHoraire(e.debut, e.fin)}</span>
                 <span class="pile-mini"><strong>${e.titre}</strong>
-                  <span class="aide">${[(e.promos || []).join(', '), e.groupes || 'tous les groupes', e.salle].filter(Boolean).join(' · ')}</span></span>
+                  <span class="etiquettes">${etiquettesPromo(e.promos || [], e.groupes || 'tous les groupes')}</span>
+                  ${e.salle ? html`<span class="aide">${e.salle}</span>` : ''}</span>
               </li>`
             )}</ul>`
           : vide('Aucune épreuve ce jour-là.')}

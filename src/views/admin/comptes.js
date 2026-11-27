@@ -1,6 +1,6 @@
 // Back-office : inscrits, promos, groupes de rotation, passage d'année.
 import { html } from '../../lib/html.js';
-import { CODES_PROMOS, libellePromo } from '../../lib/promos.js';
+import { CODES_PROMOS, libellePromo, couleurPromo } from '../../lib/promos.js';
 import { lireCsvInscrits } from '../../lib/csv.js';
 import { enteteAdmin } from './index.js';
 import { vide } from '../commun.js';
@@ -52,7 +52,7 @@ export async function vueAdminComptes(app) {
     <section class="carte pile">
       <h2 class="titre-section">Groupes de rotation</h2>
       <div class="grille-4">${CODES_PROMOS.map(
-        (p) => html`<div class="pile-mini"><strong>${libellePromo(p)}</strong> <span class="aide">${compte(p)} étudiant(s) actif(s)</span>
+        (p) => html`<div class="pile-mini groupe-promo" style="--c: ${couleurPromo(p)}"><strong>${libellePromo(p)}</strong> <span class="aide">${compte(p)} étudiant(s) actif(s)</span>
           ${groupes.filter((g) => g.promo === p).map(
             (g) => html`<span class="puce">${g.nom} <button class="croix" data-suppr-groupe="${g.id}" aria-label="Supprimer ${g.nom}">×</button></span>`
           )}

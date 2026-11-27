@@ -1,7 +1,7 @@
 // Morceaux d'interface partagés entre les écrans.
 import { html, urlSure } from '../lib/html.js';
 import { icones } from '../lib/icones.js';
-import { libellePromo } from '../lib/promos.js';
+import { libellePromo, couleurPromo, stylePromo, CODES_PROMOS } from '../lib/promos.js';
 import { jourSemaineCourt, numeroJour, plageHoraire, zoomActif, AVANCE_ZOOM_MIN } from '../lib/dates.js';
 
 export function badgePromo(profil) {
@@ -17,8 +17,16 @@ export function enTete(titre, profil, retour) {
   </header>`;
 }
 
+// Étiquettes de promo (et de groupe) aux couleurs du code MDEPi.
+export function etiquettesPromo(promos = [], groupes = '') {
+  if (!promos.length) return [];
+  if (CODES_PROMOS.every((p) => promos.includes(p))) return [html`<span class="etiquette promo" style="--c: #141414">Toutes promos</span>`];
+  return promos.map((p) => html`<span class="etiquette promo" style="--c: ${couleurPromo(p)}">${p}${groupes && promos.length === 1 ? ` · ${groupes}` : ''}</span>`);
+}
+export { stylePromo };
+
 export function etiquettes(s) {
-  const t = [];
+  const t = [...etiquettesPromo(s.promos)];
   if (s.annulee) t.push(html`<span class="etiquette annulee">Annulée</span>`);
   else if (s.modifiee_le) t.push(html`<span class="etiquette modifiee">Modifiée</span>`);
   if (s.presentiel) t.push(html`<span class="etiquette">Présentiel</span>`);
@@ -29,7 +37,7 @@ export function etiquettes(s) {
 
 // Ligne de séance du planning (bloc date à gauche).
 export function ligneSeance(s) {
-  return html`<a class="carte ligne-seance${s.annulee ? ' est-annulee' : ''}" href="#/seance/${s.id}">
+  return html`<a class="carte ligne-seance teinte-promo${s.annulee ? ' est-annulee' : ''}" style="${stylePromo(s.promos)}" href="#/seance/${s.id}">
     <div class="bloc-date${s.epreuve ? ' epreuve' : ''}">
       <span class="jsem">${jourSemaineCourt(s.debut)}</span><span class="jnum">${numeroJour(s.debut)}</span>
     </div>

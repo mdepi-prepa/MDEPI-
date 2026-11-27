@@ -10,7 +10,7 @@ import { icones } from '../lib/icones.js';
 import { dateCourte } from '../lib/dates.js';
 import { points, formatNote, noteSur20 } from '../lib/bareme.js';
 import { serieDe, aPlat, lettre, htmlQcm, chargerImages, LIBELLES_TYPES, noterCopie, CATEGORIES, categorieDe } from '../lib/qcm.js';
-import { ancrerQuestion, enTete, vide } from './commun.js';
+import { ancrerQuestion, enTete, stylePromo, vide } from './commun.js';
 import { questionCorrigee, sommaireCopie } from './qcm-rendu.js';
 
 const CLE_ONGLET = 'mdepi-entrainement-onglet';
@@ -76,7 +76,7 @@ export async function vueEntrainement(app) {
   const ligne = ({ s, infos: inf }) => {
     const t = tentatives.filter((e) => e.serie_id === serieDe(s));
     const notes = t.map((e) => noteSur20(Number(e.points), e.total));
-    return html`<a class="carte ligne-entrainement" href="#/entrainement/${s.id}" data-cat="${categorieDe(s)}" data-matiere="${s.matiere || ''}">
+    return html`<a class="carte ligne-entrainement teinte-promo" style="${stylePromo(s.promos)}" href="#/entrainement/${s.id}" data-cat="${categorieDe(s)}" data-matiere="${s.matiere || ''}">
       <div class="pile-mini">
         <strong>${s.titre}</strong>
         <span class="aide">${s.matiere ? s.matiere + ' · ' : ''}${dateCourte(s.debut)} · ${inf.questions} questions · ${inf.dossiers} dossier${inf.dossiers > 1 ? 's' : ''}</span>

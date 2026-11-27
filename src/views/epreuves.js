@@ -4,7 +4,7 @@ import { html } from '../lib/html.js';
 import { icones } from '../lib/icones.js';
 import { dateLongue, dateCourte, plageHoraire, compteARebours } from '../lib/dates.js';
 import { estEquipe } from '../lib/acces.js';
-import { enTete, etiquettes, vide } from './commun.js';
+import { enTete, etiquettes, stylePromo, vide } from './commun.js';
 import { qcmLibre } from '../lib/qcm.js';
 
 export async function vueEpreuves(app) {
@@ -22,7 +22,7 @@ export async function vueEpreuves(app) {
     return `${s.promos.join(', ')}${noms.length ? ' · ' + noms.join(', ') : ' · toute la promo'}`;
   };
 
-  const carteAVenir = (s) => html`<a class="carte carte-epreuve${s.annulee ? ' est-annulee' : ''}" href="#/seance/${s.id}">
+  const carteAVenir = (s) => html`<a class="carte carte-epreuve teinte-promo${s.annulee ? ' est-annulee' : ''}" style="${stylePromo(s.promos)}" href="#/seance/${s.id}">
     <div class="ligne-haut">
       <span class="surtitre">${dateLongue(s.debut).toUpperCase()}</span>
       ${s.annulee ? '' : html`<span class="etiquette accent">${compteARebours(s.debut, s.fin, maintenant)}</span>`}
@@ -36,7 +36,7 @@ export async function vueEpreuves(app) {
     <div class="etiquettes">${etiquettes(s)}</div>
   </a>`;
 
-  const lignePassee = (s) => html`<a class="ligne-info" href="#/seance/${s.id}">
+  const lignePassee = (s) => html`<a class="ligne-info teinte-promo" style="${stylePromo(s.promos)}" href="#/seance/${s.id}">
     <span class="pile-mini"><strong>${s.titre}</strong><span class="aide">${dateCourte(s.debut)}${equipe ? ` · ${cible(s)}` : ''}</span></span>
     <span class="lien-accent">Note et classement ${icones.chevron(14)}</span>
   </a>`;

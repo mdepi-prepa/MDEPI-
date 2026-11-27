@@ -12,6 +12,13 @@ export function libellePromo(code) {
   return p ? `${p.code} · ${p.annee}` : 'Équipe MDEPi';
 }
 
+// Style d'une séance aux couleurs de sa promo (bordure, étiquettes) :
+// une seule promo → sa couleur ; plusieurs → noir.
+export function stylePromo(promos) {
+  const liste = Array.isArray(promos) ? promos : [promos];
+  return `--c: ${liste.length === 1 ? couleurPromo(liste[0]) : '#141414'}`;
+}
+
 export function couleurPromo(code) {
   return PROMOS[code]?.couleur ?? '#141414';
 }

@@ -2,7 +2,7 @@
 import { html, urlSure } from '../lib/html.js';
 import { icones } from '../lib/icones.js';
 import { grouperParMois, dateCourte, duree } from '../lib/dates.js';
-import { enTete, ligneSeance, vide } from './commun.js';
+import { enTete, ligneSeance, stylePromo, vide } from './commun.js';
 import { qcmLibre } from '../lib/qcm.js';
 
 export async function vuePlanning(app, { onglet = 'avenir' } = {}) {
@@ -38,7 +38,7 @@ export async function vuePlanning(app, { onglet = 'avenir' } = {}) {
   const cartePassee = (s) => {
     const replay = urlSure(s.replay_url);
     const supports = supportsDe.get(s.id) || [];
-    return html`<div class="carte carte-passee">
+    return html`<div class="carte carte-passee teinte-promo" style="${stylePromo(s.promos)}">
       <a class="ligne-corps" href="#/seance/${s.id}">
         <span class="ligne-titre">${s.titre}</span>
         <span class="ligne-meta">${dateCourte(s.debut)}${s.replay_duree_min ? ` · replay de ${duree(s.replay_duree_min)}` : ''}</span>

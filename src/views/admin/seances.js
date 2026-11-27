@@ -1,6 +1,6 @@
 // Back-office : séances du planning, replays et documents.
 import { html } from '../../lib/html.js';
-import { LIEUX, CODES_PROMOS } from '../../lib/promos.js';
+import { LIEUX, CODES_PROMOS, couleurPromo } from '../../lib/promos.js';
 import { MATIERES, TOUTES_MATIERES } from '../../lib/matieres.js';
 import { dateCourte, plageHoraire, versChampsDate, depuisChampsDate } from '../../lib/dates.js';
 import { enteteAdmin } from './index.js';
@@ -119,7 +119,7 @@ export async function vueAdminSeance(app, { id, copie, epreuve }) {
       <fieldset class="cases"><legend>Groupes de rotation (aucun coché = toute la promo)</legend>
         ${groupes.length
           ? groupes.map(
-              (g) => html`<label class="case" data-promo-groupe="${g.promo}"><input type="checkbox" name="groupes" value="${g.id}" ${s.groupes.includes(g.id) ? 'checked' : ''}> ${g.promo} · ${g.nom}</label>`
+              (g) => html`<label class="case case-promo" data-promo-groupe="${g.promo}" style="--c: ${couleurPromo(g.promo)}"><input type="checkbox" name="groupes" value="${g.id}" ${s.groupes.includes(g.id) ? 'checked' : ''}> ${g.promo} · ${g.nom}</label>`
             )
           : html`<span class="aide">Aucun groupe créé (voir Comptes).</span>`}
       </fieldset>
