@@ -178,6 +178,13 @@ describe('barème', () => {
     expect(await pts('QRM', ['A', 'B'], [])).toBe(0);
     expect(await pts('QRM', ['A'], null)).toBe(0);
     expect(await pts('QRU', ['C'], [])).toBe(0);
+    // Indispensable (A) oubliée ou inacceptable (E) cochée : 0.
+    const fat = async (choix) =>
+      Number((await db.query(`select points('QRM', $1::jsonb, '{A,B}', '{}', $2, '', '{}', '{A}', '{E}') as p`, [props, choix])).rows[0].p);
+    expect(await fat(['A', 'B'])).toBe(1);
+    expect(await fat(['A'])).toBe(0.5);
+    expect(await fat(['B'])).toBe(0);
+    expect(await fat(['A', 'B', 'E'])).toBe(0);
   });
 });
 
@@ -266,6 +273,15 @@ describe('QCM des épreuves', () => {
   it('une copie rendue n’est plus modifiable', async () => {
     await en(ids.camille, 'select rendre_copie($1)', [q.e]);
     await expect(en(ids.camille, `select enregistrer_reponse($1, $2, '{}', 'x', false)`, [q.e, q.q2])).rejects.toThrow(/rendue/);
+  });
+  it('marquer une proposition inacceptable recalcule les notes de la série', async () => {
+    expect(Number((await en(ids.camille, 'select points from mon_resultat($1)', [q.e]))[0].points)).toBe(1.5);
+    await en(ids.camille, `update corrections set inacceptables = '{B}' where question_id = $1`, [q.q1]); // sans effet : réservé à l'équipe
+    expect(Number((await en(ids.camille, 'select points from mon_resultat($1)', [q.e]))[0].points)).toBe(1.5);
+    await en(ids.prof, `update corrections set inacceptables = '{C}' where question_id = $1`, [q.q1]);
+    // Camille avait coché C (inacceptable) en Q1 : 0 au lieu de 0,5.
+    expect(Number((await en(ids.camille, 'select points from mon_resultat($1)', [q.e]))[0].points)).toBe(1);
+    await en(ids.prof, `update corrections set inacceptables = '{}' where question_id = $1`, [q.q1]);
   });
   it('la note d’une copie ne se lit pas directement (seulement via mon résultat)', async () => {
     const [c] = await db.query('select id from copies where user_id = $1', [ids.leo]).then((r) => r.rows);

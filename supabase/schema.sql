@@ -315,6 +315,11 @@ create table if not exists public.corrections (
   commentaire text not null default ''
 );
 
+-- Propositions « fatales », comme dans Théia : une indispensable (juste) non
+-- cochée, ou une inacceptable (fausse) cochée, met 0 à la question.
+alter table public.corrections add column if not exists indispensables text[] not null default '{}';
+alter table public.corrections add column if not exists inacceptables text[] not null default '{}';
+
 create table if not exists public.copies (
   id uuid primary key default gen_random_uuid(),
   seance_id uuid not null references public.seances(id) on delete cascade,
@@ -403,6 +408,8 @@ $$;
 
 -- Barème MDEPi (type EDN). QRM : 0 discordance = 1, 1 = 0,5, 2 = 0,2, 3+ = 0 ;
 -- une QRM sans aucune case cochée vaut 0 (décision de l'équipe, 27/11/2026).
+-- QRU et QRM : une proposition indispensable non cochée ou une inacceptable
+-- cochée met 0 à la question (comme Théia).
 -- QRU : 1 si la bonne réponse seule est cochée. QROC : 1 si la réponse correspond
 -- à une réponse acceptée (correction automatique tolérante, voir qroc_juste) et
 -- n'a pas été refusée par l'équipe.
@@ -498,7 +505,9 @@ begin
 end;
 $$;
 
-create or replace function public.points(p_type text, p_propositions jsonb, p_bonnes text[], p_qroc text[], p_choix text[], p_texte text, p_refus text[] default '{}')
+drop function if exists public.points(text, jsonb, text[], text[], text[], text, text[]);
+create or replace function public.points(p_type text, p_propositions jsonb, p_bonnes text[], p_qroc text[], p_choix text[], p_texte text,
+                                         p_refus text[] default '{}', p_indispensables text[] default '{}', p_inacceptables text[] default '{}')
 returns numeric language plpgsql immutable as $$
 declare d integer;
 begin
@@ -506,6 +515,8 @@ begin
     return case when public.qroc_juste(p_texte, p_qroc, p_refus) then 1 else 0 end;
   end if;
   if cardinality(coalesce(p_choix, '{}')) = 0 then return 0; end if;
+  -- Indispensable oubliée ou inacceptable cochée : 0 à la question.
+  if not (coalesce(p_indispensables, '{}') <@ p_choix) or coalesce(p_inacceptables, '{}') && p_choix then return 0; end if;
   select count(*) into d from jsonb_array_elements(p_propositions) p
    where ((p->>'id') = any (coalesce(p_choix, '{}'))) <> ((p->>'id') = any (p_bonnes));
   if p_type = 'QRU' then return case when d = 0 then 1 else 0 end; end if;
@@ -518,9 +529,9 @@ create or replace function public.note_copie(p_copie uuid)
 returns table (points numeric, total integer, note20 numeric)
 language sql stable security definer set search_path = public as $$
   with c as (select c.*, public.serie_de(s) as serie from public.copies c join public.seances s on s.id = c.seance_id where c.id = p_copie)
-  select coalesce(sum(public.points(q.type, q.propositions, k.bonnes, k.reponses_qroc, r.choix, r.texte, k.refusees_qroc)), 0),
+  select coalesce(sum(public.points(q.type, q.propositions, k.bonnes, k.reponses_qroc, r.choix, r.texte, k.refusees_qroc, k.indispensables, k.inacceptables)), 0),
          count(q.id)::integer,
-         case when count(q.id) = 0 then 0 else round(20 * coalesce(sum(public.points(q.type, q.propositions, k.bonnes, k.reponses_qroc, r.choix, r.texte, k.refusees_qroc)), 0) / count(q.id), 2) end
+         case when count(q.id) = 0 then 0 else round(20 * coalesce(sum(public.points(q.type, q.propositions, k.bonnes, k.reponses_qroc, r.choix, r.texte, k.refusees_qroc, k.indispensables, k.inacceptables)), 0) / count(q.id), 2) end
   from c join public.questions q on q.serie_id = c.serie
   join public.corrections k on k.question_id = q.id
   left join public.reponses r on r.copie_id = c.id and r.question_id = q.id

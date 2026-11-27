@@ -2,6 +2,8 @@
 // (supabase/schema.sql, section 6) : les garder identiques.
 //   QRM  : 0 discordance = 1 pt, 1 = 0,5, 2 = 0,2, 3 ou plus = 0 ;
 //          aucune case cochée = 0 (décision de l'équipe, 27/11/2026)
+//   QRU et QRM : proposition indispensable non cochée ou inacceptable cochée
+//          = 0 à la question (comme Théia)
 //   QRU  : 1 pt si seule la bonne réponse est cochée
 //   QROC : 1 pt si la réponse correspond à une réponse acceptée, avec la
 //          correction automatique tolérante de qroc.js (fautes de frappe,
@@ -30,9 +32,16 @@ export function points(question, correction, reponse) {
     return corrigerQroc(reponse?.texte, correction.reponses_qroc, correction.refusees_qroc).juste ? 1 : 0;
   }
   if (!choix.length) return 0;
+  if (fatale(correction, choix)) return 0;
   const d = discordances(question.propositions, correction.bonnes, choix);
   if (question.type === 'QRU') return d === 0 ? 1 : 0;
   return [1, 0.5, 0.2][d] ?? 0;
+}
+
+// Indispensable oubliée ou inacceptable cochée (0 à la question).
+export function fatale(correction, choix) {
+  const c = new Set(choix || []);
+  return (correction?.indispensables || []).some((id) => !c.has(id)) || (correction?.inacceptables || []).some((id) => c.has(id));
 }
 
 // Verdict par proposition, pour la correction : Juste, Fausse (cochée à tort), Oubliée.

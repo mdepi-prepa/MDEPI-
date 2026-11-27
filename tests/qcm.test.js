@@ -131,3 +131,19 @@ describe('exports CSV', () => {
     expect(csv.slice(1)).toBe(`"'=HYPERLINK(""http://x"")";'+1;'@SUM(A1);Scanner;12,5`);
   });
 });
+
+describe('propositions indispensables et inacceptables', () => {
+  const q = { type: 'QRM', propositions: ['A', 'B', 'C', 'D', 'E'].map((id) => ({ id })) };
+  const c = { bonnes: ['A', 'B'], indispensables: ['A'], inacceptables: ['E'] };
+  it('indispensable oubliée : 0, même avec une seule discordance', () => {
+    expect(points(q, c, { choix: ['B'] })).toBe(0);
+    expect(points(q, c, { choix: ['A'] })).toBe(0.5);
+  });
+  it('inacceptable cochée : 0', () => {
+    expect(points(q, c, { choix: ['A', 'B', 'E'] })).toBe(0);
+    expect(points(q, c, { choix: ['A', 'B', 'D'] })).toBe(0.5);
+  });
+  it('QRU : inacceptable cochée = 0', () => {
+    expect(points({ ...q, type: 'QRU' }, { bonnes: ['A'], inacceptables: ['C'] }, { choix: ['C'] })).toBe(0);
+  });
+});

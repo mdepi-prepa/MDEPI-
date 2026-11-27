@@ -129,11 +129,36 @@ export async function vueAdminCorrige(app, { id }) {
     ${enteteAdmin('Sujet corrigé', `#/admin/epreuves/${id}/qcm`)}
     <section class="carte pile">
       <h2 class="titre-seance">${s?.titre}</h2>
+      <p class="aide no-print">Comme dans Théia, marquez une proposition juste « indispensable » (l'oublier met 0 à la question) ou une proposition fausse « inacceptable » (la cocher met 0). Les notes de toute la série sont recalculées.</p>
       <button class="btn contour no-print" onclick="window.print()">Imprimer ou enregistrer en PDF</button>
     </section>
-    ${qcm.length ? qcmCorrige(qcm, corrections, null) : vide('Aucun QCM.')}
+    ${qcm.length ? qcmCorrige(qcm, corrections, null, true) : vide('Aucun QCM.')}
   </div>`;
-  return { html: vue, monter: (el) => chargerImages(el, app.api), titre: 'Sujet corrigé' };
+  function monter(el) {
+    chargerImages(el, app.api);
+    el.addEventListener('change', async (e) => {
+      const sel = e.target.closest('[data-marque]');
+      if (!sel) return;
+      const qid = sel.dataset.marque;
+      const pid = sel.dataset.prop;
+      const c = corrections[qid];
+      const indispensables = (c.indispensables || []).filter((x) => x !== pid);
+      const inacceptables = (c.inacceptables || []).filter((x) => x !== pid);
+      if (sel.value === 'indispensable') indispensables.push(pid);
+      if (sel.value === 'inacceptable') inacceptables.push(pid);
+      sel.disabled = true;
+      try {
+        await app.api.modifierCorrection(qid, { indispensables, inacceptables });
+        Object.assign(c, { indispensables, inacceptables });
+        app.message('Correction enregistrée : notes recalculées.');
+        app.rafraichir();
+      } catch (err) {
+        app.message(err.message, 'erreur');
+        sel.disabled = false;
+      }
+    });
+  }
+  return { html: vue, monter, titre: 'Sujet corrigé' };
 }
 
 // ---------- Résultats ----------

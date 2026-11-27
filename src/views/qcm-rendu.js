@@ -3,7 +3,7 @@
 // commentaire de correction. Sert à l'étudiant (sa copie), à l'équipe
 // (sujet corrigé, copie d'un étudiant) et à l'impression (sauvegarde PDF).
 import { html, brut } from '../lib/html.js';
-import { points, verdict, formatNote } from '../lib/bareme.js';
+import { points, verdict, formatNote, fatale } from '../lib/bareme.js';
 import { lettre, htmlQcm, LIBELLES_TYPES } from '../lib/qcm.js';
 import { corrigerQroc } from '../lib/qroc.js';
 
@@ -11,8 +11,30 @@ const VERDICTS = { juste: 'Juste', fausse: 'Fausse', oubliee: 'Oubliée' };
 
 export const coche = (on, titre) => html`<span class="coche${on ? ' on' : ''}" role="img" aria-label="${titre}: ${on ? 'cochée' : 'non cochée'}"></span>`;
 
+// Marque « fatale » d'une proposition (comme Théia).
+function marque(c, id) {
+  if ((c.indispensables || []).includes(id)) return html`<span class="marque-fatale indisp">Indispensable</span>`;
+  if ((c.inacceptables || []).includes(id)) return html`<span class="marque-fatale inacc">Inacceptable</span>`;
+  return '';
+}
+
+// Choix de la marque dans le back-office (sujet corrigé) : indispensable sur
+// une proposition juste, inacceptable sur une fausse.
+function choixMarque(q, c, p) {
+  const bonne = c.bonnes.includes(p.id);
+  const val = (c.indispensables || []).includes(p.id) ? 'indispensable' : (c.inacceptables || []).includes(p.id) ? 'inacceptable' : '';
+  return html`<label class="choix-marque no-print"><span class="sr">Marque de la proposition</span>
+    <select data-marque="${q.id}" data-prop="${p.id}">
+      <option value="">Sans marque</option>
+      ${bonne
+        ? html`<option value="indispensable" ${val === 'indispensable' ? 'selected' : ''}>Indispensable (oubliée = 0)</option>`
+        : html`<option value="inacceptable" ${val === 'inacceptable' ? 'selected' : ''}>Inacceptable (cochée = 0)</option>`}
+    </select></label>`;
+}
+
 // Une question corrigée. reponse : réponse de l'étudiant, ou undefined pour le sujet corrigé seul.
-export function questionCorrigee(q, num, correction, reponse, avecCopie) {
+// editable : sujet corrigé du back-office, où l'on marque les propositions.
+export function questionCorrigee(q, num, correction, reponse, avecCopie, editable = false) {
   const c = correction || { bonnes: [], reponses_qroc: [], explications: {}, commentaire: '' };
   const pts = avecCopie ? points(q, c, reponse) : null;
   const qroc = avecCopie && q.type === 'QROC' ? corrigerQroc(reponse?.texte, c.reponses_qroc, c.refusees_qroc) : null;
@@ -35,7 +57,7 @@ export function questionCorrigee(q, num, correction, reponse, avecCopie) {
               <td class="lettre">${lettre(i)}</td>
               <td class="centre">${coche(c.bonnes.includes(p.id), 'Réponse attendue')}</td>
               ${avecCopie ? html`<td class="centre">${coche((reponse?.choix || []).includes(p.id), 'Votre réponse')}</td>` : ''}
-              <td>${brut(htmlQcm(p.texte))}${v ? html`<span class="verdict-court">${VERDICTS[v]}</span>` : ''}${exp ? html`<div class="explication">${brut(htmlQcm(exp))}</div>` : ''}</td>
+              <td>${brut(htmlQcm(p.texte))} ${marque(c, p.id)}${v ? html`<span class="verdict-court">${VERDICTS[v]}</span>` : ''}${exp ? html`<div class="explication">${brut(htmlQcm(exp))}</div>` : ''}${editable ? choixMarque(q, c, p) : ''}</td>
               ${avecCopie ? html`<td class="verdict">${VERDICTS[v] || ''}</td>` : ''}
             </tr>`;
           })}</tbody></table></div>`;
@@ -46,7 +68,7 @@ export function questionCorrigee(q, num, correction, reponse, avecCopie) {
       <span>${LIBELLES_TYPES[q.type]}</span>
     </header>
     <div class="q-corps">
-      ${avecCopie ? html`<p class="q-points ${pts === 1 ? 'plein' : pts > 0 ? 'partiel' : 'nul'}">${formatNote(pts)} / 1 point${reponse?.validee === false ? ' · réponse non validée' : ''}</p>` : ''}
+      ${avecCopie ? html`<p class="q-points ${pts === 1 ? 'plein' : pts > 0 ? 'partiel' : 'nul'}">${formatNote(pts)} / 1 point${reponse?.validee === false ? ' · réponse non validée' : ''}${q.type !== 'QROC' && reponse?.choix?.length && fatale(c, reponse.choix) ? ' · proposition indispensable oubliée ou inacceptable cochée' : ''}</p>` : ''}
       <div class="q-enonce">${brut(htmlQcm(q.enonce))}</div>
       ${corps}
       ${c.commentaire ? html`<div class="q-commentaire"><strong>Commentaire de correction de la question</strong>${brut(htmlQcm(c.commentaire))}</div>` : ''}
@@ -55,12 +77,12 @@ export function questionCorrigee(q, num, correction, reponse, avecCopie) {
 }
 
 // Tout le QCM corrigé, dossier par dossier.
-export function qcmCorrige(qcm, corrections, reponses) {
+export function qcmCorrige(qcm, corrections, reponses, editable = false) {
   const avecCopie = !!reponses;
   return qcm.map(
     (d) => html`<section class="dossier-corr">
       <h2 class="titre-dossier">${d.titre}</h2>
-      ${d.questions.map((q, i) => questionCorrigee(q, i + 1, corrections[q.id], reponses?.[q.id], avecCopie))}
+      ${d.questions.map((q, i) => questionCorrigee(q, i + 1, corrections[q.id], reponses?.[q.id], avecCopie, editable))}
     </section>`
   );
 }
