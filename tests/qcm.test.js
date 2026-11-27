@@ -110,3 +110,12 @@ describe('outils QCM (exports, note)', async () => {
     expect(csvResultats(r).split('\r\n')[1]).toBe('1;Martin;Camille;c@ex.fr;A;;;1,5;2;15');
   });
 });
+
+describe('correction automatique des QROC', async () => {
+  const { corrigerQroc } = await import('../src/lib/qroc.js');
+  const cas = JSON.parse(readFileSync(join(__dirname, 'qroc-cas.json'), 'utf8'));
+  it.each(cas)('« $texte » → $mode', ({ texte, acceptees, refusees, juste, mode }) => {
+    const r = corrigerQroc(texte, acceptees, refusees);
+    expect([r.juste, r.mode]).toEqual([juste, mode]);
+  });
+});

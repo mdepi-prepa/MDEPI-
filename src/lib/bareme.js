@@ -2,8 +2,11 @@
 // (supabase/schema.sql, section 6) : les garder identiques.
 //   QRM  : 0 discordance = 1 pt, 1 = 0,5, 2 = 0,2, 3 ou plus = 0
 //   QRU  : 1 pt si seule la bonne réponse est cochée
-//   QROC : 1 pt si la réponse fait partie des réponses acceptées
-//          (sans tenir compte des majuscules, accents et espaces)
+//   QROC : 1 pt si la réponse correspond à une réponse acceptée, avec la
+//          correction automatique tolérante de qroc.js (fautes de frappe,
+//          ordre des mots, synonymes…), sauf si l'équipe l'a refusée
+
+import { corrigerQroc } from './qroc.js';
 
 export function normaliser(t) {
   return String(t ?? '')
@@ -23,8 +26,7 @@ export function discordances(propositions, bonnes, choix) {
 export function points(question, correction, reponse) {
   const choix = reponse?.choix || [];
   if (question.type === 'QROC') {
-    const t = normaliser(reponse?.texte);
-    return t && (correction.reponses_qroc || []).some((a) => normaliser(a) === t) ? 1 : 0;
+    return corrigerQroc(reponse?.texte, correction.reponses_qroc, correction.refusees_qroc).juste ? 1 : 0;
   }
   const d = discordances(question.propositions, correction.bonnes, choix);
   if (question.type === 'QRU') return d === 0 ? 1 : 0;

@@ -372,3 +372,9 @@ body.mode-epreuve #contenu > .passage { max-width: 1100px; margin: 0 auto; }
   .copie-imprimable + .copie-imprimable { break-before: page; }
   .v-juste, .v-fausse, .v-oubliee, .q-bandeau, .coche.on { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
+.etiquette.ok { background: var(--juste-fond); color: var(--juste); }
+.tableau tr.qroc-approche td { background: var(--orange-fond); }
+.actions-ligne { white-space: nowrap; }
+.ligne-ajout { display: flex; gap: 8px; }
+.ligne-ajout input { flex: 1; min-width: 0; }
+.ligne-ajout .btn { flex: none; }

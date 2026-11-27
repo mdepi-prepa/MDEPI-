@@ -4,7 +4,8 @@ import { html } from '../../lib/html.js';
 import { dateCourte, plageHoraire, heure } from '../../lib/dates.js';
 import { formatNote, points } from '../../lib/bareme.js';
 import { parsePackage, lireFichiers, versDossiers } from '../../lib/qti.js';
-import { aPlat, chargerImages, csvResultats, csvCopies, telecharger, texteBrut } from '../../lib/qcm.js';
+import { aPlat, chargerImages, csvResultats, csvCopies, telecharger, questionCourte } from '../../lib/qcm.js';
+import { corrigerQroc, cle } from '../../lib/qroc.js';
 import { enteteAdmin } from './index.js';
 import { qcmCorrige, bandeauNote } from '../qcm-rendu.js';
 import { vide } from '../commun.js';
@@ -37,6 +38,7 @@ export async function vueAdminQcm(app, { id }) {
       ${nbQ
         ? html`<div class="actions">
             <a class="btn plein" href="#/admin/epreuves/${id}/resultats">Résultats et copies</a>
+            ${qcm.some((d) => d.questions.some((q) => q.type === 'QROC')) ? html`<a class="btn contour" href="#/admin/epreuves/${id}/qroc">Vérifier les QROC</a>` : ''}
             <a class="btn contour" href="#/admin/epreuves/${id}/corrige">Sujet corrigé (aperçu, PDF)</a>
             <button class="btn contour" data-action="publier">${s.correction_publiee ? 'Masquer la correction et les notes' : 'Publier la correction et les notes'}</button>
           </div>
@@ -156,6 +158,7 @@ export async function vueAdminResultats(app, { id }) {
         <div><dt>Min – max</dt><dd>${notes.length ? `${formatNote(notes[0])} – ${formatNote(notes.at(-1))}` : '–'}</dd></div>
       </dl>
       <p class="aide">${s.correction_publiee ? 'Notes publiées aux étudiants.' : 'Notes pas encore publiées aux étudiants.'}</p>
+      ${questions.some((q) => q.type === 'QROC') ? html`<a class="btn contour" href="#/admin/epreuves/${id}/qroc">Vérifier la correction automatique des QROC</a>` : ''}
       <h3 class="titre-section">Sauvegardes</h3>
       <div class="actions">
         <button class="btn plein" data-export="resultats">Notes et rangs (CSV)</button>
@@ -191,7 +194,7 @@ export async function vueAdminResultats(app, { id }) {
             <thead><tr><th>Question</th><th>Type</th><th>Points moyens</th><th></th></tr></thead>
             <tbody>${reussite.map(
               ({ q, moy }) => html`<tr>
-                <td><strong>${q.dossier.titre} · Q${q.qi + 1}</strong><br><span class="aide">${texteBrut(q.enonce).slice(-110)}</span></td>
+                <td><strong>${q.dossier.titre} · Q${q.qi + 1}</strong><br><span class="aide">${questionCourte(q.enonce, 110)}</span></td>
                 <td>${q.type}</td>
                 <td>${formatNote(Math.round(moy * 100) / 100)}</td>
                 <td><span class="barre" style="--p:${Math.round(moy * 100)}%" title="${Math.round(moy * 100)} %"></span></td>
@@ -243,4 +246,117 @@ export async function vueAdminCopie(app, { id, user }) {
       : vide('Copie introuvable.')}
   </div>`;
   return { html: vue, monter: (el) => chargerImages(el, app.api), titre: 'Copie' };
+}
+
+// ---------- Vérification de la correction automatique des QROC ----------
+// Les réponses des étudiants sont regroupées (même réponse à la mise en forme
+// près) ; l'équipe accepte ou refuse d'un clic, et toutes les notes suivent.
+const ETATS = {
+  approche: ['À vérifier', 'Acceptée car proche'],
+  faux: ['Fausse', 'Aucune réponse acceptée ne correspond'],
+  refusee: ['Refusée', "Refusée par l'équipe"],
+  exact: ['Juste', 'Correspond à une réponse acceptée'],
+};
+const ORDRE = { approche: 0, faux: 1, refusee: 2, exact: 3 };
+
+export async function vueAdminQroc(app, { id }) {
+  const s = await app.api.seance(id);
+  const [qcm, corrections, copies] = await Promise.all([app.api.qcm(id), app.api.corrections(id), app.api.copiesEpreuve(id)]);
+  const questions = aPlat(qcm).filter((q) => q.type === 'QROC');
+
+  const groupes = (q) => {
+    const c = corrections[q.id] || {};
+    const par = new Map();
+    for (const cp of copies) {
+      const texte = cp.reponses.find((x) => x.question_id === q.id)?.texte?.trim();
+      if (!texte) continue;
+      const k = cle(texte);
+      const g = par.get(k) || { textes: new Map(), n: 0 };
+      g.n++;
+      g.textes.set(texte, (g.textes.get(texte) || 0) + 1);
+      par.set(k, g);
+    }
+    return [...par.values()]
+      .map((g) => {
+        const textes = [...g.textes.entries()].sort((a, b) => b[1] - a[1]).map(([t]) => t);
+        return { textes, n: g.n, ...corrigerQroc(textes[0], c.reponses_qroc, c.refusees_qroc) };
+      })
+      .sort((a, b) => ORDRE[a.mode] - ORDRE[b.mode] || b.n - a.n);
+  };
+  const listes = questions.map((q) => ({ q, g: groupes(q) }));
+  const aVerifier = listes.reduce((n, l) => n + l.g.filter((x) => x.mode === 'approche').length, 0);
+
+  const vue = html`<div class="page">
+    ${enteteAdmin('Correction des QROC', `#/admin/epreuves/${id}/resultats`)}
+    <section class="carte pile">
+      <h2 class="titre-seance">${s.titre}</h2>
+      <p>Les QROC sont corrigées automatiquement : majuscules, accents, articles, pluriels et ordre des mots ne comptent pas ; les abréviations courantes (TDM, AP, ECG, écho…) sont reconnues ; une faute de frappe est tolérée sur les mots longs, jamais sur un chiffre, une négation, le début ou la fin du mot (hypo/hyper, -ite/-ose).</p>
+      <p class="aide">${aVerifier ? `${aVerifier} réponse${aVerifier > 1 ? 's' : ''} acceptée${aVerifier > 1 ? 's' : ''} car proche${aVerifier > 1 ? 's' : ''} : à vérifier en priorité.` : 'Aucune réponse approchée à vérifier.'} Accepter ou refuser met à jour les notes de toute la série.</p>
+    </section>
+    ${listes.length
+      ? listes.map(
+          ({ q, g }) => html`<section class="carte pile" data-question="${q.id}">
+            <p class="surtitre">${q.dossier.titre} · Q${q.qi + 1}</p>
+            <p class="aide">${questionCourte(q.enonce)}</p>
+            <div class="pile-mini">
+              <span class="aide">Réponses acceptées</span>
+              <div class="etiquettes">${(corrections[q.id]?.reponses_qroc || []).map((r) => html`<span class="etiquette">${r}</span>`)}</div>
+              ${(corrections[q.id]?.refusees_qroc || []).length
+                ? html`<span class="aide">Réponses refusées</span><div class="etiquettes">${corrections[q.id].refusees_qroc.map((r) => html`<span class="etiquette annulee">${r}</span>`)}</div>`
+                : ''}
+            </div>
+            <form class="ligne-ajout" data-ajout="${q.id}"><input name="r" placeholder="Ajouter une réponse acceptée" aria-label="Ajouter une réponse acceptée"><button class="btn contour">Ajouter</button></form>
+            ${g.length
+              ? html`<div class="tableau-defile"><table class="tableau">
+                  <thead><tr><th>Réponse des étudiants</th><th>Copies</th><th>Correction</th><th></th></tr></thead>
+                  <tbody>${g.map(
+                    (x) => html`<tr class="qroc-${x.mode}">
+                      <td><strong>${x.textes[0]}</strong>${x.textes.length > 1 ? html`<br><span class="aide">aussi : ${x.textes.slice(1, 4).join(' · ')}</span>` : ''}</td>
+                      <td>${x.n}</td>
+                      <td><span class="etiquette ${x.juste ? 'ok' : 'annulee'}">${ETATS[x.mode][0]}</span>${x.mode === 'approche' ? html`<br><span class="aide">proche de « ${x.acceptee} »</span>` : ''}</td>
+                      <td class="actions-ligne">
+                        ${x.mode !== 'exact' ? html`<button class="btn lien" data-accepter="${x.textes[0]}">${x.mode === 'approche' ? 'Confirmer' : 'Accepter'}</button>` : ''}
+                        ${x.juste || x.mode === 'exact' ? html`<button class="btn lien rouge" data-refuser="${x.textes[0]}">Refuser</button>` : ''}
+                      </td>
+                    </tr>`
+                  )}</tbody></table></div>`
+              : html`<p class="aide">Aucune réponse pour le moment.</p>`}
+          </section>`
+        )
+      : vide('Cette épreuve n’a pas de QROC.')}
+  </div>`;
+
+  function monter(el) {
+    const modifier = async (qid, f) => {
+      const c = corrections[qid];
+      const champs = f({ reponses_qroc: [...(c.reponses_qroc || [])], refusees_qroc: [...(c.refusees_qroc || [])] });
+      try {
+        await app.api.modifierCorrection(qid, champs);
+        app.message('Correction mise à jour, notes recalculées.');
+        app.rafraichir();
+      } catch (err) {
+        app.message(err.message, 'erreur');
+      }
+    };
+    const sans = (liste, texte) => liste.filter((r) => cle(r) !== cle(texte));
+    el.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-accepter],[data-refuser]');
+      if (!b) return;
+      const qid = b.closest('[data-question]').dataset.question;
+      if (b.dataset.accepter !== undefined) {
+        const t = b.dataset.accepter;
+        modifier(qid, (c) => ({ reponses_qroc: [...sans(c.reponses_qroc, t), t], refusees_qroc: sans(c.refusees_qroc, t) }));
+      } else {
+        const t = b.dataset.refuser;
+        modifier(qid, (c) => ({ reponses_qroc: sans(c.reponses_qroc, t), refusees_qroc: [...sans(c.refusees_qroc, t), t] }));
+      }
+    });
+    el.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const t = String(new FormData(e.target).get('r') || '').trim();
+      if (!t) return;
+      modifier(e.target.dataset.ajout, (c) => ({ reponses_qroc: [...sans(c.reponses_qroc, t), t], refusees_qroc: sans(c.refusees_qroc, t) }));
+    });
+  }
+  return { html: vue, monter, titre: 'QROC' };
 }

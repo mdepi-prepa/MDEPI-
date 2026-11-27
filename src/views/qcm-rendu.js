@@ -5,6 +5,7 @@
 import { html, brut } from '../lib/html.js';
 import { points, verdict, formatNote } from '../lib/bareme.js';
 import { lettre, htmlQcm, LIBELLES_TYPES } from '../lib/qcm.js';
+import { corrigerQroc } from '../lib/qroc.js';
 
 const VERDICTS = { juste: 'Juste', fausse: 'Fausse', oubliee: 'Oubliée' };
 
@@ -14,11 +15,14 @@ export const coche = (on, titre) => html`<span class="coche${on ? ' on' : ''}" r
 export function questionCorrigee(q, num, correction, reponse, avecCopie) {
   const c = correction || { bonnes: [], reponses_qroc: [], explications: {}, commentaire: '' };
   const pts = avecCopie ? points(q, c, reponse) : null;
+  const qroc = avecCopie && q.type === 'QROC' ? corrigerQroc(reponse?.texte, c.reponses_qroc, c.refusees_qroc) : null;
   const corps =
     q.type === 'QROC'
       ? html`<div class="qroc-corr">
           ${avecCopie
-            ? html`<div class="qroc-votre ${pts ? 'v-juste' : 'v-fausse'}"><span class="aide">Votre réponse</span><strong>${reponse?.texte || '(pas de réponse)'}</strong></div>`
+            ? html`<div class="qroc-votre ${pts ? 'v-juste' : 'v-fausse'}"><span class="aide">Votre réponse</span><strong>${reponse?.texte || '(pas de réponse)'}</strong>
+                ${qroc?.mode === 'approche' ? html`<span class="aide">Acceptée : proche de « ${qroc.acceptee} »</span>` : ''}
+                ${qroc?.mode === 'refusee' ? html`<span class="aide">Réponse refusée par l'équipe</span>` : ''}</div>`
             : ''}
           <div><span class="aide">Réponses acceptées</span><ul class="liste-acceptees">${(c.reponses_qroc || []).map((r) => html`<li>${r}</li>`)}</ul></div>
         </div>`

@@ -125,6 +125,9 @@ export function creerBackendSupabase(url, cleAnon) {
     async supprimerQcm(seanceId) {
       await this.importerQcm(seanceId, []);
     },
+    async modifierCorrection(questionId, champs) {
+      verifier(await sb.from('corrections').update(champs).eq('question_id', questionId));
+    },
     async publierCorrection(seanceId, publiee) {
       const ids = (await this.seancesSerie(seanceId)).map((x) => x.id);
       verifier(await sb.from('seances').update({ correction_publiee: publiee }).in('id', ids));

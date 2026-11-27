@@ -5,7 +5,7 @@ import { peutVoirSeance, peutVoirAnnonce, estAdmin, estEquipe } from '../lib/acc
 import { serieDe, noterCopie, imagesUtilisees, renommerImages } from '../lib/qcm.js';
 import { QCM_DEMO } from './demo-qcm.js';
 
-const CLE = 'mdepi-demo-v3';
+const CLE = 'mdepi-demo-v4';
 export const CODE_DEMO = '123456';
 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2));
@@ -26,6 +26,12 @@ function hasard(graine) {
   let x = graine;
   return () => ((x = (x * 16807) % 2147483647) / 2147483647);
 }
+
+// Réponses variées des copies fictives (justes, fautes de frappe, fausses).
+const REPONSES_QROC_DEMO = {
+  DEMO_KFP2_Q1: ['TDM AP injecté', 'scanner abdomino-pelvien injecté', 'Scanner abdominopelvien avec injection', 'TDM abdomino-pelvienne', 'IRM abdominale', 'Échographie abdominale', 'tdm ap injecté', 'Scaner abdomino-pelvien injecté'],
+  DEMO_KFP2_Q2: ['Diverticulite', 'diveticulite aigue', 'Sigmoïdite', 'diverticulose', 'Diverticulite sigmoïdienne aiguë', 'Colite', 'diverticulite', 'Diverticulites'],
+};
 
 function donneesInitiales() {
   const gA = 'grp-d2-a';
@@ -135,7 +141,8 @@ function donneesInitiales() {
     for (const q of questions) {
       const c = qcm.corrections[q.id];
       const choix = q.propositions.filter((p) => (alea() < niveau) === c.bonnes.includes(p.id)).map((p) => p.id);
-      const texte = q.type === 'QROC' ? (alea() < niveau ? c.reponses_qroc[0] : 'Échographie abdominale') : '';
+      const variantes = REPONSES_QROC_DEMO[q.qti_id] || [];
+      const texte = q.type === 'QROC' ? variantes[Math.floor(alea() * variantes.length)] || '' : '';
       reponses[q.id] = { question_id: q.id, choix: q.type === 'QRU' ? choix.slice(0, 1) : choix, texte, validee: true, modifiee_le: jour(-10, 10) };
     }
     qcm.copies.push({ id: uid(), seance_id: ccb2.id, user_id: i.email, commencee_le: jour(-10, 9, 2), rendue_le: jour(-10, 11, 40 - n * 3), reponses });
@@ -323,6 +330,11 @@ export function creerBackendDemo() {
     },
     async supprimerQcm(seanceId) {
       await this.importerQcm(seanceId, []);
+    },
+    async modifierCorrection(questionId, champs) {
+      exiger(estEquipe);
+      Object.assign(db.corrections[questionId], champs);
+      sauver();
     },
     async publierCorrection(seanceId, publiee) {
       exiger(estEquipe);

@@ -317,6 +317,7 @@ create table if not exists public.corrections (
   question_id uuid primary key references public.questions(id) on delete cascade,
   bonnes text[] not null default '{}',          -- id des propositions justes (QRU/QRM)
   reponses_qroc text[] not null default '{}',   -- réponses acceptées (QROC)
+  refusees_qroc text[] not null default '{}',   -- réponses refusées par l'équipe (QROC), même si proches
   explications jsonb not null default '{}',     -- { "A1": "<p>…</p>" }
   commentaire text not null default ''
 );
@@ -363,8 +364,9 @@ returns boolean language sql stable security definer set search_path = public as
 $$;
 
 -- Barème MDEPi (type EDN). QRM : 0 discordance = 1, 1 = 0,5, 2 = 0,2, 3+ = 0.
--- QRU : 1 si la bonne réponse seule est cochée. QROC : 1 si la réponse fait
--- partie des réponses acceptées (sans tenir compte des majuscules, accents, espaces).
+-- QRU : 1 si la bonne réponse seule est cochée. QROC : 1 si la réponse correspond
+-- à une réponse acceptée (correction automatique tolérante, voir qroc_juste) et
+-- n'a pas été refusée par l'équipe.
 -- Même calcul en JavaScript dans src/lib/bareme.js : les garder identiques.
 create or replace function public.normaliser(t text)
 returns text language sql immutable as $$
@@ -373,13 +375,96 @@ returns text language sql immutable as $$
     'AAAAAEEEEIIIIOOOOOUUUUCaaaaaeeeeiiiiooooouuuuc')), '\s+', ' ', 'g')
 $$;
 
-create or replace function public.points(p_type text, p_propositions jsonb, p_bonnes text[], p_qroc text[], p_choix text[], p_texte text)
+-- Correction automatique des QROC. Même calcul en JavaScript dans
+-- src/lib/qroc.js (explications et listes de mots) : les garder identiques.
+-- Les cas de tests/qroc-cas.json sont vérifiés des deux côtés.
+create or replace function public.cle_qroc(t text)
+returns text language plpgsql immutable as $$
+declare
+  s text; m text; res text[] := '{}';
+  vides text[] := array['le', 'la', 'les', 'l', 'un', 'une', 'des', 'de', 'du', 'd', 'au', 'aux', 'a', 'en', 'et', 'par', 'pour', 'avec', 'sur'];
+  syn jsonb := '{"tdm": "scanner", "tomodensitometrie": "scanner", "scanographie": "scanner", "ap": "abdominopelvien", "injecte": "injection", "injectee": "injection", "injectes": "injection", "injectees": "injection", "ecg": "electrocardiogramme", "echo": "echographie", "rx": "radiographie", "radio": "radiographie", "nfs": "hemogramme", "aigu": "aigue", "aigus": "aigue", "aigues": "aigue"}';
+begin
+  s := public.normaliser(t);
+  s := replace(s, '%', ' pourcent ');
+  s := regexp_replace(s, '(\d),(\d)', '\1.\2', 'g');
+  s := regexp_replace(s, '[^a-z0-9.]+', ' ', 'g');
+  s := regexp_replace(s, '\.(?!\d)|(?<!\d)\.', ' ', 'g');
+  s := btrim(regexp_replace(s, '\s+', ' ', 'g'));
+  s := btrim(replace(' ' || s || ' ', ' abdomino pelvien ', ' abdominopelvien '));
+  s := btrim(replace(' ' || s || ' ', ' abdomino pelvienne ', ' abdominopelvien '));
+  s := btrim(replace(' ' || s || ' ', ' abdominopelvienne ', ' abdominopelvien '));
+  s := btrim(replace(' ' || s || ' ', ' abdo pelvien ', ' abdominopelvien '));
+  foreach m in array string_to_array(s, ' ') loop
+    continue when m = '';
+    m := coalesce(syn->>m, m);
+    continue when m = any(vides);
+    if length(m) > 3 and m ~ '[sx]$' and m !~ '\d' then m := left(m, -1); end if;
+    res := res || coalesce(syn->>m, m);
+  end loop;
+  return array_to_string(res, ' ');
+end;
+$$;
+
+-- Distance d'édition (nombre de lettres à changer), limitée aux mots proches.
+create or replace function public.distance_qroc(a text, b text)
+returns integer language plpgsql immutable as $$
+declare prec integer[]; cur integer[]; i integer; j integer;
+begin
+  if abs(length(a) - length(b)) > 2 then return 99; end if;
+  prec := array(select generate_series(0, length(b)));
+  for i in 1..length(a) loop
+    cur := array[i];
+    for j in 1..length(b) loop
+      cur := cur || least(prec[j + 1] + 1, cur[j] + 1, prec[j] + case when substr(a, i, 1) = substr(b, j, 1) then 0 else 1 end);
+    end loop;
+    prec := cur;
+  end loop;
+  return prec[length(b) + 1];
+end;
+$$;
+
+create or replace function public.qroc_juste(p_texte text, p_acceptees text[], p_refusees text[])
+returns boolean language plpgsql immutable as $$
+declare
+  t text := public.cle_qroc(p_texte); k text; tol integer;
+  unites text[] := array['g', 'gramme', 'mg', 'kg', 'ml', 'cl', 'l', 'litre', 'j', 'jour', 'h', 'heure', 'min', 'minute', 'an', 'ans', 'semaine', 'mois', 'cm', 'mm', 'mmhg', 'ui', 'pourcent', 'pct', 'verre', 'unite'];
+  negs text[] := array['sans', 'non', 'pas', 'absence'];
+  tri text; nt text[]; nk text[];
+begin
+  if t = '' then return false; end if;
+  if exists (select 1 from unnest(coalesce(p_refusees, '{}')) r where public.cle_qroc(r) = t) then return false; end if;
+  tri := array_to_string(array(select x from unnest(string_to_array(t, ' ')) x order by x collate "C"), ' ');
+  nt := array(select x from unnest(string_to_array(t, ' ')) with ordinality u(x, n) where x ~ '^\d+(\.\d+)?$' order by n);
+  for k in select public.cle_qroc(a) from unnest(coalesce(p_acceptees, '{}')) a loop
+    continue when k = '';
+    if k = t or array_to_string(array(select x from unnest(string_to_array(k, ' ')) x order by x collate "C"), ' ') = tri then return true; end if;
+  end loop;
+  for k in select public.cle_qroc(a) from unnest(coalesce(p_acceptees, '{}')) a loop
+    continue when k = '';
+    nk := array(select x from unnest(string_to_array(k, ' ')) with ordinality u(x, n) where x ~ '^\d+(\.\d+)?$' order by n);
+    if cardinality(nk) > 0 and nk = nt and not exists (
+      select 1 from unnest(string_to_array(t, ' ')) m
+      where not (m = any(nt) or m = any(unites) or m = any(string_to_array(k, ' ')))) then return true; end if;
+  end loop;
+  if t ~ '\d' then return false; end if;
+  for k in select public.cle_qroc(a) from unnest(coalesce(p_acceptees, '{}')) a loop
+    continue when k = '' or k ~ '\d'
+      or (string_to_array(k, ' ') && negs) <> (string_to_array(t, ' ') && negs)
+      or left(k, 4) <> left(t, 4) or right(k, 3) <> right(t, 3);
+    tol := case when length(k) >= 12 then 2 when length(k) >= 6 then 1 else 0 end;
+    if tol > 0 and public.distance_qroc(t, k) <= tol then return true; end if;
+  end loop;
+  return false;
+end;
+$$;
+
+create or replace function public.points(p_type text, p_propositions jsonb, p_bonnes text[], p_qroc text[], p_choix text[], p_texte text, p_refus text[] default '{}')
 returns numeric language plpgsql immutable as $$
 declare d integer;
 begin
   if p_type = 'QROC' then
-    return case when btrim(public.normaliser(p_texte)) <> '' and exists (
-      select 1 from unnest(p_qroc) a where btrim(public.normaliser(a)) = btrim(public.normaliser(p_texte))) then 1 else 0 end;
+    return case when public.qroc_juste(p_texte, p_qroc, p_refus) then 1 else 0 end;
   end if;
   select count(*) into d from jsonb_array_elements(p_propositions) p
    where ((p->>'id') = any (coalesce(p_choix, '{}'))) <> ((p->>'id') = any (p_bonnes));
@@ -393,9 +478,9 @@ create or replace function public.note_copie(p_copie uuid)
 returns table (points numeric, total integer, note20 numeric)
 language sql stable security definer set search_path = public as $$
   with c as (select c.*, public.serie_de(s) as serie from public.copies c join public.seances s on s.id = c.seance_id where c.id = p_copie)
-  select coalesce(sum(public.points(q.type, q.propositions, k.bonnes, k.reponses_qroc, r.choix, r.texte)), 0),
+  select coalesce(sum(public.points(q.type, q.propositions, k.bonnes, k.reponses_qroc, r.choix, r.texte, k.refusees_qroc)), 0),
          count(q.id)::integer,
-         case when count(q.id) = 0 then 0 else round(20 * coalesce(sum(public.points(q.type, q.propositions, k.bonnes, k.reponses_qroc, r.choix, r.texte)), 0) / count(q.id), 2) end
+         case when count(q.id) = 0 then 0 else round(20 * coalesce(sum(public.points(q.type, q.propositions, k.bonnes, k.reponses_qroc, r.choix, r.texte, k.refusees_qroc)), 0) / count(q.id), 2) end
   from c join public.questions q on q.serie_id = c.serie
   join public.corrections k on k.question_id = q.id
   left join public.reponses r on r.copie_id = c.id and r.question_id = q.id

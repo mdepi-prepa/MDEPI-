@@ -158,6 +158,14 @@ describe('annonces', () => {
   });
 });
 
+describe('correction automatique des QROC (même résultat qu’en JavaScript)', () => {
+  const cas = JSON.parse(readFileSync(new URL('./qroc-cas.json', import.meta.url), 'utf8'));
+  it.each(cas)('« $texte » → $juste', async ({ texte, acceptees, refusees, juste }) => {
+    const r = await db.query('select qroc_juste($1, $2, $3) as j', [texte, acceptees, refusees || []]);
+    expect(r.rows[0].j).toBe(juste);
+  });
+});
+
 describe('QCM des épreuves', () => {
   const q = {};
   it('l’équipe importe un sujet dans une épreuve partagée par deux groupes', async () => {

@@ -70,7 +70,7 @@ export function noterCopie(questions, corrections, reponses) {
 
 // Texte brut d'un énoncé HTML (exports CSV).
 export function texteBrut(h) {
-  const d = new DOMParser().parseFromString(String(h ?? ''), 'text/html');
+  const d = new DOMParser().parseFromString(String(h ?? '').replace(/<(br|\/p|\/div|\/li)[^>]*>/gi, ' $&'), 'text/html');
   return (d.body.textContent || '').replace(/\s+/g, ' ').trim();
 }
 
@@ -124,4 +124,12 @@ export function csvCopies(qcm, corrections, resultats, copies) {
     }
   }
   return versCsv(lignes);
+}
+
+// La question elle-même (« Q3 : … ») plutôt que tout le cas clinique.
+export function questionCourte(h, max = 220) {
+  const t = texteBrut(h);
+  const m = t.match(/Q\d+\s*:.*$/);
+  const r = m ? m[0] : t;
+  return r.length > max ? '… ' + r.slice(-max) : r;
 }
