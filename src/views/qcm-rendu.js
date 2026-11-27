@@ -85,17 +85,19 @@ export function questionCorrigee(q, num, correction, reponse, avecCopie, editabl
 }
 
 // Sommaire d'une copie corrigée : un lien par dossier, avec la note du dossier.
-function sommaireCopie(qcm, corrections, reponses) {
+// Sommaire d'une copie : chaque dossier avec sa note ; lien = clic vers le dossier.
+export function sommaireCopie(qcm, corrections, reponses, lien = true) {
   return html`<nav class="carte sommaire no-print" aria-label="Sommaire des dossiers">
     <h2 class="titre-section">Sommaire</h2>
     <ol class="sommaire-liste">${qcm.map((d, i) => {
       const max = d.questions.reduce((t, q) => t + coefficient(q), 0);
       const obtenus = d.questions.reduce((t, q) => t + pointsPonderes(q, corrections[q.id], reponses[q.id]), 0);
       const ratio = max ? obtenus / max : 0;
-      return html`<li><a href="#dossier-${i + 1}" data-ancre="dossier-${i + 1}">
-        <span class="sommaire-titre">${d.titre}</span>
-        <span class="sommaire-note ${ratio >= 0.7 ? 'bien' : ratio >= 0.4 ? 'moyen' : 'faible'}">${formatNote(Math.round(obtenus * 100) / 100)} / ${formatNote(max)}</span>
-      </a></li>`;
+      const contenu = html`<span class="sommaire-titre">${d.titre}</span>
+        <span class="sommaire-note ${ratio >= 0.7 ? 'bien' : ratio >= 0.4 ? 'moyen' : 'faible'}">${formatNote(Math.round(obtenus * 100) / 100)} / ${formatNote(max)}</span>`;
+      return lien
+        ? html`<li><a href="#dossier-${i + 1}" data-ancre="dossier-${i + 1}">${contenu}</a></li>`
+        : html`<li><span class="sommaire-ligne">${contenu}</span></li>`;
     })}</ol>
   </nav>`;
 }

@@ -513,6 +513,7 @@ body.mode-epreuve #contenu > .passage { max-width: 1100px; margin: 0 auto; }
 .sommaire { display: flex; flex-direction: column; gap: 8px; }
 .sommaire-liste { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
 .sommaire-liste li + li { border-top: 1px solid var(--bord-2); }
+.sommaire-liste .sommaire-ligne { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 4px; font-size:14px; font-weight:500; }
 .sommaire-liste a { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 4px; font-size: 14px; font-weight: 500; border-radius: 8px; transition: background var(--transition); }
 @media (hover: hover) { .sommaire-liste a:hover { background: var(--fond); } }
 .sommaire-titre { min-width: 0; overflow-wrap: anywhere; }

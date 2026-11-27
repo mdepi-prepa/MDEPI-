@@ -11,7 +11,7 @@ import { dateCourte } from '../lib/dates.js';
 import { points, formatNote, noteSur20, pointsPonderes, coefficient } from '../lib/bareme.js';
 import { serieDe, aPlat, lettre, htmlQcm, chargerImages, LIBELLES_TYPES, noterCopie, CATEGORIES, categorieDe } from '../lib/qcm.js';
 import { enTete, vide } from './commun.js';
-import { questionCorrigee } from './qcm-rendu.js';
+import { questionCorrigee, sommaireCopie } from './qcm-rendu.js';
 import { chrono } from './passage.js';
 
 const CLE_ONGLET = 'mdepi-entrainement-onglet';
@@ -263,6 +263,13 @@ export async function vueRejouer(app, { id }) {
       if (!questions.length) return;
       arreterChrono();
       const { points: pts, total, note20: note } = noterCopie(questions, corrections, reponses);
+      // Questions jouées regroupées par dossier (pour le sommaire).
+      const dossiers = [];
+      for (const q of questions) {
+        const d = dossiers.find((x) => x.ref === q.dossier);
+        if (d) d.questions.push(q);
+        else dossiers.push({ ref: q.dossier, titre: q.dossier.titre, questions: [q] });
+      }
       try {
         await app.api.enregistrerEntrainement(s.id, reponses, Math.round(pts * 100) / 100, total);
       } catch (err) {
@@ -282,10 +289,13 @@ export async function vueRejouer(app, { id }) {
           <a class="btn contour" href="#/entrainement">Autres épreuves</a>
         </div>
       </section>
+      ${sommaireCopie(dossiers, corrections, reponses, examen)}
       ${examen
-        ? html`<section class="pile-petite"><h2 class="titre-section">Correction</h2>${questions.map(
-            (q) => html`<section class="passage-question"><p class="surtitre">${q.dossier.titre} · question ${q.qi + 1} sur ${q.dossier.questions.length}</p>
+        ? html`<section class="pile-petite"><h2 class="titre-section">Correction</h2>${dossiers.map(
+            (d, n) => html`<div class="pile-petite dossier-corr" id="dossier-${n + 1}">${d.questions.map(
+              (q) => html`<section class="passage-question"><p class="surtitre">${q.dossier.titre} · question ${q.qi + 1} sur ${q.dossier.questions.length}</p>
               ${questionCorrigee(q, q.num, corrections[q.id], reponses[q.id] || { question_id: q.id, choix: [], texte: '' }, true)}</section>`
+            )}</div>`
           )}</section>`
         : ''}`);
       chargerImages(zone, app.api);
