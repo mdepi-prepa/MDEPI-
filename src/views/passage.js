@@ -86,7 +86,9 @@ async function accueilEpreuve(app, s, infos, copie, ouverte) {
               ? html`<a class="btn plein" href="#/epreuve/${s.id}/correction">Voir ma copie corrigée</a>`
               : html`<p class="aide">La copie corrigée n'est pas encore disponible.</p>`}
           </section>`
-        : html`<p class="aide">Votre note et votre rang apparaîtront ici à la fin de l'épreuve, le ${dateLongue(s.fin).toLowerCase()} à ${heure(s.fin)}.</p>`
+        : new Date() < new Date(s.fin)
+          ? html`<p class="aide">Votre note et votre rang apparaîtront ici à la fin de l'épreuve, le ${dateLongue(s.fin).toLowerCase()} à ${heure(s.fin)}.</p>`
+          : html`<p class="aide">Votre note et votre rang apparaîtront ici dans quelques minutes, le temps que les dernières copies arrivent.</p>`
       : ''}
     ${infos.correction_visible && !ouverte && !avant && !equipe
       ? html`<a class="btn contour" href="#/entrainement/${s.id}">Rejouer cette épreuve en entraînement</a>`
@@ -291,8 +293,10 @@ async function passage(app, s, copie) {
       resume.querySelector('[data-action=retour]').focus();
     }
 
+    let finEnCours = false;
     async function terminer(auto = false) {
-      if (fini) return;
+      if (fini || finEnCours) return;
+      finEnCours = true;
       try {
         // Dernières réponses en attente.
         for (const [qid, r] of Object.entries(attente)) {
@@ -318,6 +322,8 @@ async function passage(app, s, copie) {
           p.hidden = false;
         } else app.message(texte, 'erreur');
         if (auto) setTimeout(() => terminer(true), 5000);
+      } finally {
+        finEnCours = false;
       }
     }
 

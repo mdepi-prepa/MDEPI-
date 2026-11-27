@@ -236,10 +236,8 @@ drop policy if exists seances_equipe on public.seances;
 create policy seances_equipe on public.seances for all to authenticated
   using (public.est_equipe()) with check (public.est_equipe());
 
--- documents : visibles si la séance l'est ; écriture par l'équipe
-drop policy if exists documents_lecture on public.documents;
-create policy documents_lecture on public.documents for select to authenticated
-  using (exists (select 1 from public.seances s where s.id = seance_id and public.peut_voir_seance(s)));
+-- documents : lecture définie en section 6 (sujet et correction d'une
+-- épreuve cachés jusqu'à sa fin) ; écriture par l'équipe
 drop policy if exists documents_equipe on public.documents;
 create policy documents_equipe on public.documents for all to authenticated
   using (public.est_equipe()) with check (public.est_equipe());
@@ -259,18 +257,13 @@ create policy lues_perso on public.annonces_lues for all to authenticated
 
 -- ---------------------------------------------------------------------
 -- 5. Fichiers (bucket privé « documents ») : lecture si le document est
---    visible, dépôt et suppression par l'équipe.
+--    visible (règle en section 6), dépôt et suppression par l'équipe.
 -- ---------------------------------------------------------------------
 
 insert into storage.buckets (id, name, public)
 values ('documents', 'documents', false)
 on conflict (id) do nothing;
 
-drop policy if exists documents_fichiers_lecture on storage.objects;
-create policy documents_fichiers_lecture on storage.objects for select to authenticated
-  using (bucket_id = 'documents' and exists (
-    select 1 from public.documents d join public.seances s on s.id = d.seance_id
-    where d.chemin = storage.objects.name and public.peut_voir_seance(s)));
 drop policy if exists documents_fichiers_equipe on storage.objects;
 create policy documents_fichiers_equipe on storage.objects for all to authenticated
   using (bucket_id = 'documents' and public.est_equipe())
@@ -347,6 +340,13 @@ returns boolean language sql stable as $$
   select s.epreuve and not s.annulee and now() >= s.debut and now() <= s.fin + interval '2 minutes'
 $$;
 
+-- Épreuve finie pour de bon : heure de fin + délai de grâce passés. Avant,
+-- des réponses peuvent encore arriver : ni correction, ni note, ni classement.
+create or replace function public.epreuve_finie(s public.seances)
+returns boolean language sql stable as $$
+  select now() > s.fin + interval '2 minutes'
+$$;
+
 -- Le sujet d'une série est-il visible pour moi ? (équipe : toujours ;
 -- étudiant : une séance de la série le concerne et elle a commencé)
 create or replace function public.peut_voir_sujet(p_serie uuid)
@@ -357,14 +357,14 @@ returns boolean language sql stable security definer set search_path = public as
 $$;
 
 -- Copie corrigée (bonnes réponses) : visible par chaque étudiant dès la fin de
--- SA séance (son groupe a composé), ou plus tôt si l'équipe la publie. Un groupe
+-- SA séance (son groupe a composé, délai de grâce compris), ou plus tôt si l'équipe la publie. Un groupe
 -- qui n'a pas encore composé ne la voit pas dans l'app.
 create or replace function public.peut_voir_correction(p_serie uuid)
 returns boolean language sql stable security definer set search_path = public as $$
   select public.est_equipe() or exists (
     select 1 from public.seances s
     where public.serie_de(s) = p_serie and public.peut_voir_seance(s) and not s.annulee
-      and (s.correction_publiee or now() >= s.fin))
+      and (s.correction_publiee or public.epreuve_finie(s)))
 $$;
 
 -- Barème MDEPi (type EDN). QRM : 0 discordance = 1, 1 = 0,5, 2 = 0,2, 3+ = 0.
@@ -490,6 +490,10 @@ language sql stable security definer set search_path = public as $$
   left join public.reponses r on r.copie_id = c.id and r.question_id = q.id
 $$;
 
+-- Note d'une copie quelconque : appelée seulement par les fonctions ci-dessous
+-- (mon_resultat, resultats_epreuve), jamais directement depuis l'app.
+revoke execute on function public.note_copie(uuid) from public, anon, authenticated;
+
 -- Nombre de questions et de dossiers d'une épreuve (visible avant l'ouverture,
 -- sans dévoiler le sujet).
 create or replace function public.infos_qcm(p_seance uuid)
@@ -498,7 +502,7 @@ language sql stable security definer set search_path = public as $$
   select (select count(*)::integer from public.questions q where q.serie_id = public.serie_de(s)),
          (select count(*)::integer from public.dossiers d where d.serie_id = public.serie_de(s)),
          public.peut_voir_correction(public.serie_de(s)),
-         (select count(*)::integer from public.seances x where public.serie_de(x) = public.serie_de(s) and not x.annulee and x.fin > now())
+         (select count(*)::integer from public.seances x where public.serie_de(x) = public.serie_de(s) and not x.annulee and not public.epreuve_finie(x))
   from public.seances s where s.id = p_seance and public.peut_voir_seance(s)
 $$;
 
@@ -557,19 +561,19 @@ language plpgsql stable security definer set search_path = public as $$
 declare s public.seances; ma uuid;
 begin
   select * into s from public.seances where id = p_seance;
-  if not found or not public.peut_voir_seance(s) or now() < s.fin then return; end if;
+  if not found or not public.peut_voir_seance(s) or not public.epreuve_finie(s) then return; end if;
   select id into ma from public.copies where seance_id = p_seance and user_id = auth.uid();
   if ma is null then return; end if;
   return query
   with toutes as (
     select c.id, n.points, n.total, n.note20 from public.copies c
-    join public.seances x on x.id = c.seance_id and public.serie_de(x) = public.serie_de(s) and x.fin <= now()
+    join public.seances x on x.id = c.seance_id and public.serie_de(x) = public.serie_de(s) and public.epreuve_finie(x) and not x.annulee
     cross join lateral public.note_copie(c.id) n)
   select t.points, t.total, t.note20,
          (select round(avg(note20), 2) from toutes),
          (select count(*)::integer + 1 from toutes o where o.note20 > t.note20),
          (select count(*)::integer from toutes),
-         (select count(*)::integer from public.seances x where public.serie_de(x) = public.serie_de(s) and not x.annulee and x.fin > now())
+         (select count(*)::integer from public.seances x where public.serie_de(x) = public.serie_de(s) and not x.annulee and not public.epreuve_finie(x))
   from toutes t where t.id = ma;
 end;
 $$;
@@ -650,3 +654,56 @@ drop policy if exists qcm_images_lecture on storage.objects;
 create policy qcm_images_lecture on storage.objects for select to authenticated
   using (bucket_id = 'documents' and (storage.foldername(name))[1] = 'qcm'
          and public.peut_voir_sujet(((storage.foldername(name))[2])::uuid));
+
+-- PDF d'une épreuve : le sujet est visible des étudiants concernés dès le début
+-- de leur épreuve, la correction seulement après sa fin (ou si l'équipe la publie).
+-- Les supports et les documents des autres séances : dès que la séance est visible.
+create or replace function public.peut_voir_document(p_seance uuid, p_type text)
+returns boolean language sql stable security definer set search_path = public as $$
+  select public.est_equipe() or exists (
+    select 1 from public.seances s
+    where s.id = p_seance and public.peut_voir_seance(s)
+      and (p_type = 'support' or not s.epreuve or s.correction_publiee or public.epreuve_finie(s)
+           or (p_type = 'sujet' and now() >= s.debut)))
+$$;
+drop policy if exists documents_lecture on public.documents;
+create policy documents_lecture on public.documents for select to authenticated
+  using (public.peut_voir_document(seance_id, type));
+drop policy if exists documents_fichiers_lecture on storage.objects;
+create policy documents_fichiers_lecture on storage.objects for select to authenticated
+  using (bucket_id = 'documents' and exists (
+    select 1 from public.documents d
+    where d.chemin = storage.objects.name and public.peut_voir_document(d.seance_id, d.type)));
+
+-- Protection des copies : une épreuve qui a des copies ne peut pas être
+-- supprimée (l'annuler à la place), ni l'épreuve d'origine d'une série tant
+-- que des groupes y sont rattachés (le QCM est stocké sur elle) ; une
+-- question à laquelle des étudiants ont répondu ne peut plus être supprimée.
+create or replace function public.proteger_epreuve()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if exists (select 1 from public.copies c where c.seance_id = old.id) then
+    raise exception 'Des étudiants ont déjà composé : cette épreuve ne peut plus être supprimée (cochez « Annulée » à la place).';
+  end if;
+  if exists (select 1 from public.seances x where x.serie = old.id) then
+    raise exception 'D''autres groupes passent cette épreuve (épreuves dupliquées) : supprimez-les d''abord.';
+  end if;
+  return old;
+end;
+$$;
+drop trigger if exists proteger_epreuve on public.seances;
+create trigger proteger_epreuve before delete on public.seances
+  for each row execute function public.proteger_epreuve();
+
+create or replace function public.proteger_questions()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if exists (select 1 from public.reponses r where r.question_id = old.id) then
+    raise exception 'Des étudiants ont déjà répondu : le QCM ne peut plus être remplacé ni supprimé.';
+  end if;
+  return old;
+end;
+$$;
+drop trigger if exists proteger_questions on public.questions;
+create trigger proteger_questions before delete on public.questions
+  for each row execute function public.proteger_questions();

@@ -76,7 +76,10 @@ export function texteBrut(h) {
 
 // ---------- Exports CSV (séparateur « ; », lisible par Excel) ----------
 function cellule(v) {
-  const s = String(v ?? '');
+  let s = String(v ?? '');
+  // Texte saisi par un étudiant commençant par = + - @ : Excel le prendrait
+  // pour une formule (lien piégé…). Une apostrophe le garde en texte.
+  if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
   return /[";\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 

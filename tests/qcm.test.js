@@ -120,3 +120,11 @@ describe('correction automatique des QROC', async () => {
     expect([r.juste, r.mode]).toEqual([juste, mode]);
   });
 });
+
+describe('exports CSV', () => {
+  it('neutralise les formules Excel saisies par un étudiant', async () => {
+    const { versCsv } = await import('../src/lib/qcm.js');
+    const csv = versCsv([['=HYPERLINK("http://x")', '+1', '@SUM(A1)', 'Scanner', '12,5']]);
+    expect(csv.slice(1)).toBe(`"'=HYPERLINK(""http://x"")";'+1;'@SUM(A1);Scanner;12,5`);
+  });
+});

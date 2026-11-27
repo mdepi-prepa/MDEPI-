@@ -75,6 +75,10 @@ export async function vueAdminQcm(app, { id }) {
         const dossiers = versDossiers(res.questions);
         importe = { dossiers, images: res.images };
         const n = dossiers.reduce((a, d) => a + d.questions.length, 0);
+        // Promo lue dans le titre Théia (« CONF HGE D3 … ») différente de celle de l'épreuve.
+        const autrePromo = dossiers.filter((d) => d.promo && !s.promos.includes(d.promo));
+        if (autrePromo.length)
+          res.msgs.unshift({ k: 'w', m: `Attention : ${autrePromo.map((d) => `« ${d.titre} » (${d.promo})`).join(', ')} ne correspond pas à la promo de l’épreuve (${s.promos.join(', ')}). Vérifiez que c'est le bon export.` });
         rapport.innerHTML = String(html`
           <ul class="rapport">${res.msgs.map((m) => html`<li class="r-${m.k}">${m.m}</li>`)}</ul>
           ${n

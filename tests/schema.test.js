@@ -7,6 +7,7 @@ import { readFileSync } from 'node:fs';
 
 const SUPABASE_MOCK = `
 create role authenticated nologin;
+create role anon nologin;
 create schema auth;
 create table auth.users (id uuid primary key default gen_random_uuid(), email text);
 create function auth.uid() returns uuid language sql stable
@@ -47,8 +48,8 @@ beforeAll(async () => {
   await db.exec(SUPABASE_MOCK);
   const schema = readFileSync(new URL('../supabase/schema.sql', import.meta.url), 'utf8');
   await db.exec(schema);
-  await db.exec(schema); // relançable sans erreur
-  await db.exec(GRANTS);
+  await db.exec(GRANTS); // droits par défaut de Supabase…
+  await db.exec(schema); // … puis le script relancé (sans erreur) les restreint
 
   const g = await db.query(`insert into groupes (promo, nom) values ('D2','A'),('D2','B') returning id`);
   ids.gA = g.rows[0].id;
@@ -206,8 +207,14 @@ describe('QCM des épreuves', () => {
   it('note et rang dès la fin de son épreuve ; les groupes suivants s’ajoutent au classement', async () => {
     expect(await en(ids.camille, 'select * from mon_resultat($1)', [q.e])).toEqual([]);
     await expect(en(ids.camille, 'select * from resultats_epreuve($1)', [q.e])).rejects.toThrow(/équipe/);
-    // Fin de l'épreuve du groupe A.
+    // Heure de fin du groupe A passée d'une minute : délai de grâce, des réponses peuvent encore
+    // arriver, donc ni note ni correction (sinon on pourrait lire la correction puis répondre).
     await db.query(`update seances set debut = now() - interval '2 hours', fin = now() - interval '1 minute' where id = $1`, [q.e]);
+    expect(await en(ids.camille, 'select * from mon_resultat($1)', [q.e])).toEqual([]);
+    expect(await en(ids.camille, 'select * from corrections')).toEqual([]);
+    expect((await en(ids.camille, 'select correction_visible from infos_qcm($1)', [q.e]))[0].correction_visible).toBe(false);
+    // Fin de l'épreuve du groupe A, délai de grâce compris.
+    await db.query(`update seances set fin = now() - interval '3 minutes' where id = $1`, [q.e]);
     let [r] = await en(ids.camille, 'select * from mon_resultat($1)', [q.e]);
     // Q1 : {A,B,C} contre {A,B} = 1 discordance = 0,5 ; Q2 : juste = 1 → 1,5 / 2 = 15/20
     expect([Number(r.points), Number(r.note20), r.rang, r.effectif, r.groupes_restants]).toEqual([1.5, 15, 1, 1, 1]);
@@ -220,7 +227,7 @@ describe('QCM des épreuves', () => {
     await en(ids.leo, `select enregistrer_reponse($1, $2, '{A,B}', '', true)`, [q.e2, q.q1]);
     await en(ids.leo, `select enregistrer_reponse($1, $2, '{}', 'ECG', true)`, [q.e2, q.q2]);
     expect((await en(ids.camille, 'select effectif from mon_resultat($1)', [q.e]))[0].effectif).toBe(1);
-    await db.query(`update seances set fin = now() - interval '1 minute' where id = $1`, [q.e2]);
+    await db.query(`update seances set fin = now() - interval '3 minutes' where id = $1`, [q.e2]);
     [r] = await en(ids.camille, 'select * from mon_resultat($1)', [q.e]);
     expect([Number(r.note20), r.rang, r.effectif, Number(r.moyenne), r.groupes_restants]).toEqual([15, 2, 2, 17.5, 0]);
     expect((await en(ids.leo, 'select rang from mon_resultat($1)', [q.e2]))[0].rang).toBe(1);
@@ -237,6 +244,33 @@ describe('QCM des épreuves', () => {
   it('une copie rendue n’est plus modifiable', async () => {
     await en(ids.camille, 'select rendre_copie($1)', [q.e]);
     await expect(en(ids.camille, `select enregistrer_reponse($1, $2, '{}', 'x', false)`, [q.e, q.q2])).rejects.toThrow(/rendue/);
+  });
+  it('la note d’une copie ne se lit pas directement (seulement via mon résultat)', async () => {
+    const [c] = await db.query('select id from copies where user_id = $1', [ids.leo]).then((r) => r.rows);
+    await expect(en(ids.camille, 'select * from note_copie($1)', [c.id])).rejects.toThrow(/permission/);
+  });
+  it('une épreuve avec des copies, ou d’origine d’une série, ne se supprime pas ; ses questions non plus', async () => {
+    await expect(en(ids.prof, 'delete from seances where id = $1', [q.e2])).rejects.toThrow(/déjà composé/);
+    await expect(en(ids.prof, 'delete from questions where id = $1', [q.q1])).rejects.toThrow(/déjà répondu/);
+    const [o] = await en(ids.prof, `insert into seances (titre, debut, fin, promos, epreuve) values ('Origine', now() + interval '2 days', now() + interval '2 days 1 hour', '{D2}', true) returning id`);
+    const [d] = await en(ids.prof, `insert into seances (titre, debut, fin, promos, epreuve, serie) values ('Copie', now() + interval '3 days', now() + interval '3 days 1 hour', '{D2}', true, $1) returning id`, [o.id]);
+    await expect(en(ids.prof, 'delete from seances where id = $1', [o.id])).rejects.toThrow(/dupliquées/);
+    await en(ids.prof, 'delete from seances where id = $1', [d.id]);
+    await en(ids.prof, 'delete from seances where id = $1', [o.id]);
+  });
+  it('sujet PDF d’une épreuve visible dès son début, correction PDF seulement après sa fin', async () => {
+    const [e] = await en(ids.prof, `insert into seances (titre, debut, fin, promos, epreuve) values ('Papier', now() + interval '1 hour', now() + interval '2 hours', '{D2}', true) returning id`);
+    await en(ids.prof, `insert into documents (seance_id, type, titre, chemin) values ($1,'correction','Corr','p/corr.pdf'),($1,'sujet','Sujet','p/sujet.pdf'),($1,'support','Fiche','p/fiche.pdf')`, [e.id]);
+    await db.query(`insert into storage.objects (bucket_id, name) values ('documents','p/corr.pdf'),('documents','p/fiche.pdf')`);
+    expect((await en(ids.camille, 'select type from documents where seance_id = $1', [e.id])).map((r) => r.type)).toEqual(['support']);
+    expect((await en(ids.camille, `select name from storage.objects where name like 'p/%'`)).map((r) => r.name)).toEqual(['p/fiche.pdf']);
+    await db.query(`update seances set debut = now() - interval '1 hour' where id = $1`, [e.id]);
+    expect((await en(ids.camille, 'select type from documents where seance_id = $1 order by type', [e.id])).map((r) => r.type)).toEqual(['sujet', 'support']);
+    expect((await en(ids.camille, `select name from storage.objects where name like 'p/%'`)).map((r) => r.name)).toEqual(['p/fiche.pdf']);
+    await db.query(`update seances set fin = now() - interval '3 minutes', debut = now() - interval '2 hours' where id = $1`, [e.id]);
+    expect((await en(ids.camille, 'select type from documents where seance_id = $1 order by type', [e.id])).map((r) => r.type)).toEqual(['correction', 'sujet', 'support']);
+    expect((await en(ids.camille, `select name from storage.objects where name like 'p/%' order by name`)).length).toBe(2);
+    await en(ids.prof, 'delete from seances where id = $1', [e.id]);
   });
 });
 
