@@ -41,10 +41,17 @@ export async function vueSeance(app, { id }) {
       ${!passee && !s.annulee
         ? html`<div class="actions">${boutonZoom(s)}<button class="btn contour" data-action="ics">${icones.agenda(18)} Ajouter à mon agenda</button></div>`
         : ''}
-      ${passee && urlSure(s.replay_url)
-        ? html`<a class="btn plein" href="${urlSure(s.replay_url)}" target="_blank" rel="noopener">${icones.lecture(16)} Regarder le replay${s.replay_duree_min ? ` (${duree(s.replay_duree_min)})` : ''}</a>`
+      ${passee && !s.annulee
+        ? html`<div class="actions-passee">
+            ${urlSure(s.replay_url)
+              ? html`<a class="btn plein" href="${urlSure(s.replay_url)}" target="_blank" rel="noopener">${icones.lecture(16)} Replay Zoom${s.replay_duree_min ? ` (${duree(s.replay_duree_min)})` : ''}</a>`
+              : html`<span class="btn inactif">${icones.video(16)} Replay Zoom à venir</span>`}
+            ${supports.map(
+              (d, i) => html`<button class="btn contour" data-doc="${d.chemin}" title="${d.titre}">${icones.fichier(16)} ${supports.length > 1 ? `Support ${i + 1}` : 'Support'}</button>`
+            )}
+            ${supports.length ? '' : html`<span class="btn inactif">${icones.fichier(16)} Support à venir</span>`}
+          </div>`
         : ''}
-      ${passee && !s.replay_url && !s.annulee && !s.epreuve ? html`<p class="aide">Le replay sera ajouté ici dès qu'il sera disponible.</p>` : ''}
       ${passee && s.epreuve && !docs.length && !enLigne ? html`<p class="aide">Le sujet et la correction seront ajoutés ici après l'épreuve.</p>` : ''}
       ${s.epreuve && !passee && !s.annulee && !equipe ? html`<p class="aide">Le support et la correction apparaîtront ici à la fin de l'épreuve.</p>` : ''}
     </section>

@@ -42,13 +42,12 @@ export async function vuePlanning(app, { onglet = 'avenir' } = {}) {
       <div class="actions-passee">
         ${replay
           ? html`<a class="btn plein" href="${replay}" target="_blank" rel="noopener">${icones.lecture(16)} Replay Zoom</a>`
-          : s.epreuve
-            ? html`<a class="btn plein" href="#/seance/${s.id}">${icones.epreuve(16)} Voir l'épreuve</a>`
-            : html`<span class="btn inactif">${icones.video(16)} Replay à venir</span>`}
+          : html`<span class="btn inactif">${icones.video(16)} Replay à venir</span>`}
         ${supports.map(
           (d, i) => html`<button class="btn contour" data-doc="${d.chemin}" title="${d.titre}">${icones.fichier(16)} ${supports.length > 1 ? `Support ${i + 1}` : 'Support'}</button>`
         )}
-        ${!supports.length && !s.epreuve ? html`<span class="btn inactif">${icones.fichier(16)} Support à venir</span>` : ''}
+        ${!supports.length ? html`<span class="btn inactif">${icones.fichier(16)} Support à venir</span>` : ''}
+        ${s.epreuve ? html`<a class="btn contour" href="#/seance/${s.id}">${icones.epreuve(16)} Voir l'épreuve</a>` : ''}
       </div>
     </div>`;
   };
