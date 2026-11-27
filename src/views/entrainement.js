@@ -8,7 +8,7 @@
 import { html, brut } from '../lib/html.js';
 import { icones } from '../lib/icones.js';
 import { dateCourte } from '../lib/dates.js';
-import { points, formatNote, noteSur20, pointsPonderes, coefficient } from '../lib/bareme.js';
+import { points, formatNote, noteSur20 } from '../lib/bareme.js';
 import { serieDe, aPlat, lettre, htmlQcm, chargerImages, LIBELLES_TYPES, noterCopie, CATEGORIES, categorieDe } from '../lib/qcm.js';
 import { ancrerQuestion, enTete, vide } from './commun.js';
 import { questionCorrigee, sommaireCopie } from './qcm-rendu.js';
@@ -468,11 +468,6 @@ export async function vueRejouer(app, { id }) {
         <h2 class="titre-seance">Score</h2>
         <div class="note-grande"><strong>${formatNote(note)}</strong><span>/ 20</span></div>
         <p>${formatNote(Math.round(pts * 100) / 100)} point${pts > 1 ? 's' : ''} sur ${total}.</p>
-        <ul class="liste-simple">${questions.map((q) => {
-          const p = pointsPonderes(q, corrections[q.id], reponses[q.id]);
-          const max = coefficient(q);
-          return html`<li>${q.dossier.titre} · Q${q.qi + 1} : <strong class="${p === max ? 'c-ok' : p > 0 ? '' : 'c-ko'}">${formatNote(Math.round(p * 100) / 100)}</strong>${max !== 1 ? ` / ${max}` : ''}${q.statut === 'annulee' ? ' (annulée)' : ''}</li>`;
-        })}</ul>
         <div class="actions">
           <button class="btn plein" data-depart="tout">Recommencer</button>
           <a class="btn contour" href="#/entrainement">Autres épreuves</a>
