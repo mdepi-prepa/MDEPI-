@@ -4,7 +4,10 @@
 import { createClient } from '@supabase/supabase-js';
 import { serieDe, imagesUtilisees, nomImageStockage, renommerImages } from '../lib/qcm.js';
 
+let urlServeur = '';
+
 export function creerBackendSupabase(url, cleAnon) {
+  urlServeur = url;
   const sb = createClient(url, cleAnon, { auth: { persistSession: true, autoRefreshToken: true } });
 
   const verifier = ({ data, error }) => {
@@ -271,6 +274,10 @@ function traduireErreur(e) {
   if (/Password should be/i.test(m)) return 'Mot de passe trop court (8 caractères minimum).';
   if (/row-level security/i.test(m)) return "Vous n'avez pas les droits pour cette action.";
   for (const t of ['Question pas encore accessible', 'Épreuve fermée', 'Copie déjà rendue', 'Question déjà validée', 'Copie introuvable', 'Épreuve introuvable', "Réservé à l'équipe"]) if (m.includes(t)) return t + '.';
-  if (/Failed to fetch|NetworkError/i.test(m)) return 'Pas de connexion internet.';
+  if (/Failed to fetch|NetworkError|Load failed|fetch failed/i.test(m)) {
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return 'Pas de connexion internet.';
+    return `Serveur injoignable (${urlServeur}). Vérifiez l'adresse VITE_SUPABASE_URL et que le projet Supabase est actif. Détail : ${m}`;
+  }
+  if (/Invalid API key|No API key|JWT|apikey/i.test(m)) return `Clé Supabase refusée : vérifiez VITE_SUPABASE_ANON_KEY (clé « anon public »). Détail : ${m}`;
   return m;
 }

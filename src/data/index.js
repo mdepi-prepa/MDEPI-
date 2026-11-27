@@ -9,6 +9,8 @@ export function nettoyerUrl(brute) {
   if (!u) return '';
   const tableau = u.match(/supabase\.com\/dashboard\/project\/([a-z0-9]+)/i);
   if (tableau) return `https://${tableau[1]}.supabase.co`;
+  // Identifiant de projet seul (ex. « abcdefgh ») : adresse Supabase standard.
+  if (/^[a-z0-9]{10,}$/i.test(u)) return `https://${u}.supabase.co`;
   if (!/^https?:\/\//i.test(u)) u = 'https://' + u;
   return u.replace(/\/(rest\/v1)?\/?$/, '');
 }
