@@ -854,25 +854,39 @@ drop policy if exists entrainements_ajout on public.entrainements;
 create policy entrainements_ajout on public.entrainements for insert to authenticated
   with check (user_id = auth.uid() and public.peut_voir_correction(serie_id));
 
--- Images des QCM : bucket « documents », dossier qcm/<série>/…
-drop policy if exists qcm_images_lecture on storage.objects;
-create policy qcm_images_lecture on storage.objects for select to authenticated
-  using (bucket_id = 'documents' and (storage.foldername(name))[1] = 'qcm'
-         and public.peut_voir_sujet(((storage.foldername(name))[2])::uuid));
+
 
 -- PDF d'une épreuve : le support (et un ancien « sujet », affiché lui aussi
 -- comme support) dès la fin de l'épreuve, délai de grâce compris : pendant
 -- l'épreuve, il dévoilerait la suite des dossiers progressifs. Les anciennes
 -- diapos de correction : quand les résultats sont publiés (ou si l'équipe la publie).
 -- Les documents des autres séances : dès que la séance est visible.
+-- Épreuve dupliquée pour plusieurs groupes : un PDF déposé sur la séance d'un
+-- groupe sert à toute la série, et chaque groupe le voit à la fin de SA séance.
 create or replace function public.peut_voir_document(p_seance uuid, p_type text)
 returns boolean language sql stable security definer set search_path = public as $$
   select public.est_equipe() or exists (
-    select 1 from public.seances s
-    where s.id = p_seance and public.peut_voir_seance(s)
+    select 1 from public.seances d
+    join public.seances s on s.id = d.id or (d.epreuve and s.epreuve and public.serie_de(s) = public.serie_de(d))
+    where d.id = p_seance and public.peut_voir_seance(s)
       and (not s.epreuve or s.correction_publiee or public.resultats_publies(s)
            or (p_type in ('support', 'sujet') and public.epreuve_finie(s))))
 $$;
+
+-- Documents d'une séance pour l'app : les siens et, pour une épreuve, ceux des
+-- autres séances de la même série (que l'étudiant ne peut pas lister lui-même).
+create or replace function public.documents_seance(p_seance uuid)
+returns setof public.documents language sql stable security definer set search_path = public as $$
+  select d.* from public.documents d
+  join public.seances x on x.id = d.seance_id
+  join public.seances s on s.id = p_seance
+  where (x.id = s.id or (x.epreuve and s.epreuve and public.serie_de(x) = public.serie_de(s)))
+    and (public.est_equipe() or public.peut_voir_seance(s))
+    and public.peut_voir_document(d.seance_id, d.type)
+  order by d.created_at
+$$;
+revoke execute on function public.documents_seance(uuid) from public, anon;
+grant execute on function public.documents_seance(uuid) to authenticated;
 drop policy if exists documents_lecture on public.documents;
 create policy documents_lecture on public.documents for select to authenticated
   using (public.peut_voir_document(seance_id, type));
@@ -937,3 +951,33 @@ as $$
 $$;
 revoke execute on function public.planning_global(timestamptz, timestamptz) from public, anon;
 grant execute on function public.planning_global(timestamptz, timestamptz) to authenticated;
+
+-- ---------------------------------------------------------------------
+-- Images des QCM : bucket « documents », dossier qcm/<série>/…
+-- Pendant l'épreuve, seulement les images des questions déjà ouvertes à
+-- l'étudiant (et du contexte de leurs dossiers) : celles des questions
+-- suivantes d'un dossier progressif restent cachées. Après (correction
+-- visible) et pour l'équipe : toutes.
+-- ---------------------------------------------------------------------
+create or replace function public.image_qcm_visible(p_nom text)
+returns boolean language plpgsql stable security definer set search_path = public as $$
+declare serie uuid; ref text := 'qcm-img:' || p_nom;
+begin
+  if public.est_equipe() then return true; end if;
+  if split_part(p_nom, '/', 1) <> 'qcm' or split_part(p_nom, '/', 2) !~ '^[0-9a-fA-F-]{36}$' then return false; end if;
+  serie := split_part(p_nom, '/', 2)::uuid;
+  if public.peut_voir_correction(serie) then return true; end if;
+  if not public.peut_voir_sujet(serie) then return false; end if;
+  return exists (
+    select 1 from public.questions q
+    left join public.dossiers d on d.id = q.dossier_id
+    where q.serie_id = serie and public.question_accessible(q)
+      and (strpos(q.enonce, ref) > 0 or strpos(q.propositions::text, ref) > 0 or strpos(coalesce(d.contexte, ''), ref) > 0));
+end;
+$$;
+revoke execute on function public.image_qcm_visible(text) from public, anon;
+
+drop policy if exists qcm_images_lecture on storage.objects;
+create policy qcm_images_lecture on storage.objects for select to authenticated
+  using (bucket_id = 'documents' and (storage.foldername(name))[1] = 'qcm'
+         and public.image_qcm_visible(name));

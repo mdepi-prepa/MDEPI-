@@ -332,11 +332,15 @@ export function creerBackendDemo() {
     async documents(seanceId) {
       const s = await this.seance(seanceId);
       if (!s) return [];
-      // Même règle que peut_voir_document (schema.sql).
+      // Même règle que documents_seance et peut_voir_document (schema.sql) :
+      // une épreuve dupliquée partage ses PDF, chaque groupe les voit à la fin de sa séance.
       const visible = (d) =>
         estEquipe(profil()) || !s.epreuve || s.correction_publiee || publies(s) ||
         ((d.type === 'support' || d.type === 'sujet') && finie(s));
-      return db.documents.filter((d) => d.seance_id === seanceId && visible(d));
+      const serie = s.serie || s.id;
+      const memeSerie = (x) => x.id === s.id || (x.epreuve && s.epreuve && (x.serie || x.id) === serie);
+      const ids = new Set(db.seances.filter(memeSerie).map((x) => x.id));
+      return db.documents.filter((d) => ids.has(d.seance_id) && visible(d));
     },
     async urlDocument() {
       const pdf = '%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj 2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj 3 0 obj<</Type/Page/MediaBox[0 0 595 842]/Parent 2 0 R>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF';

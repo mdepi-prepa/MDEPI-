@@ -71,7 +71,9 @@ export async function vueAdminSeance(app, { id, copie, epreuve }) {
   if (!s) return { html: html`<div class="page">${enteteAdmin('Séance introuvable', '#/admin/seances')}</div>` };
   const retour = s.epreuve ? '#/admin/epreuves' : '#/admin/seances';
   const nom = s.epreuve ? 'épreuve' : 'séance';
-  const [groupes, docs] = await Promise.all([app.api.groupes(), nouvelle ? [] : app.api.documents(id)]);
+  const [groupes, tousDocs] = await Promise.all([app.api.groupes(), nouvelle ? [] : app.api.documents(id)]);
+  // Seulement les PDF déposés sur cette séance (pas ceux des autres groupes de la série).
+  const docs = tousDocs.filter((d) => d.seance_id === id);
   const deb = s.debut ? versChampsDate(s.debut) : { date: '', heure: '18:30' };
   const fin = s.fin ? versChampsDate(s.fin) : { heure: '21:30' };
   const lieuAutre = s.lieu && !LIEUX.includes(s.lieu);

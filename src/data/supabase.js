@@ -59,8 +59,15 @@ export function creerBackendSupabase(url, cleAnon) {
     async seance(id) {
       return verifier(await sb.from('seances').select('*').eq('id', id).maybeSingle());
     },
+    // Documents de la séance et, pour une épreuve dupliquée, ceux des autres
+    // groupes de la série (chacun les voit à la fin de sa propre épreuve).
     async documents(seanceId) {
-      return verifier(await sb.from('documents').select('*').eq('seance_id', seanceId).order('created_at'));
+      const r = await sb.rpc('documents_seance', { p_seance: seanceId });
+      // Base pas encore mise à jour (fonction absente) : documents de la séance seule.
+      if (r.error && /documents_seance/.test(r.error.message || '')) {
+        return verifier(await sb.from('documents').select('*').eq('seance_id', seanceId).order('created_at'));
+      }
+      return verifier(r);
     },
     async urlDocument(chemin) {
       // Lien temporaire (1 h) : il ne sert à rien de le partager.

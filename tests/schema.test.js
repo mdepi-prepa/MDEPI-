@@ -404,6 +404,43 @@ describe('QCM des épreuves', () => {
     expect((await en(ids.camille, `select name from storage.objects where name like 'p/%' order by name`)).length).toBe(2);
     await en(ids.prof, 'delete from seances where id = $1', [e.id]);
   });
+  it('épreuve dupliquée : le support déposé pour un groupe est vu par chaque groupe à la fin de SA séance', async () => {
+    const [o] = await en(ids.prof, `insert into seances (titre, debut, fin, promos, groupes, epreuve) values ('Série A', now() - interval '3 hours', now() - interval '5 minutes', '{D2}', array[$1]::uuid[], true) returning id`, [ids.gA]);
+    const [c] = await en(ids.prof, `insert into seances (titre, debut, fin, promos, groupes, epreuve, serie) values ('Série B', now() + interval '1 day', now() + interval '1 day 2 hours', '{D2}', array[$1]::uuid[], true, $2) returning id`, [ids.gB, o.id]);
+    await en(ids.prof, `insert into documents (seance_id, type, titre, chemin) values ($1,'support','Support A','serie/a.pdf')`, [o.id]);
+    await db.query(`insert into storage.objects (bucket_id, name) values ('documents','serie/a.pdf')`);
+    expect((await en(ids.camille, 'select titre from documents_seance($1)', [o.id])).map((r) => r.titre)).toEqual(['Support A']);
+    // Groupe B : pas encore passé.
+    expect(await en(ids.leo, 'select titre from documents_seance($1)', [c.id])).toEqual([]);
+    expect(await en(ids.leo, `select name from storage.objects where name = 'serie/a.pdf'`)).toEqual([]);
+    // Ni la séance d'un autre groupe directement.
+    expect(await en(ids.leo, 'select titre from documents_seance($1)', [o.id])).toEqual([]);
+    await db.query(`update seances set debut = now() - interval '3 hours', fin = now() - interval '3 minutes' where id = $1`, [c.id]);
+    expect((await en(ids.leo, 'select titre from documents_seance($1)', [c.id])).map((r) => r.titre)).toEqual(['Support A']);
+    expect(await en(ids.leo, `select name from storage.objects where name = 'serie/a.pdf'`)).toEqual([{ name: 'serie/a.pdf' }]);
+    // Une autre promo, jamais.
+    expect(await en(ids.ines, 'select titre from documents_seance($1)', [c.id])).toEqual([]);
+    await en(ids.prof, 'delete from seances where id = $1', [c.id]);
+    await en(ids.prof, 'delete from seances where id = $1', [o.id]);
+  });
+  it('images d’un QCM : pendant l’épreuve, seulement celles des questions déjà ouvertes', async () => {
+    const [e] = await en(ids.prof, `insert into seances (titre, debut, fin, promos, epreuve) values ('Images', now() - interval '10 minutes', now() + interval '1 hour', '{D2}', true) returning id`);
+    const img = (n) => `qcm/${e.id}/${n}-image_${n}.png`;
+    const [d] = await en(ids.prof, `insert into dossiers (serie_id, titre, contexte) values ($1, 'DP', $2) returning id`, [e.id, `<img src="qcm-img:${img(0)}">`]);
+    await en(ids.prof, `insert into questions (serie_id, dossier_id, qti_id, ordre, type, enonce, propositions) values
+      ($1, $2, 'I1', 1, 'QRU', $3, '[{"id":"A"}]'), ($1, $2, 'I2', 2, 'QRU', $4, '[{"id":"A"}]')`,
+      [e.id, d.id, `<p>Q1</p><img src="qcm-img:${img(1)}">`, `<p>Q2</p><img src="qcm-img:${img(2)}">`]);
+    await db.query(`insert into storage.objects (bucket_id, name) values ('documents',$1),('documents',$2),('documents',$3),('documents',$4)`, [img(0), img(1), img(2), `qcm/pas-un-uuid/x.png`]);
+    const vues = async (u) => (await en(u, `select name from storage.objects where name like 'qcm/%' order by name`)).map((r) => r.name);
+    expect(await vues(ids.camille)).toEqual([img(0), img(1)]);
+    expect(await vues(ids.prof)).toContain(img(2));
+    expect(await vues(ids.ines)).toEqual([]);
+    // Fin de l'épreuve : correction visible, toutes les images.
+    await db.query(`update seances set debut = now() - interval '2 hours', fin = now() - interval '3 minutes' where id = $1`, [e.id]);
+    expect(await vues(ids.camille)).toEqual([img(0), img(1), img(2)]);
+    await en(ids.prof, 'delete from seances where id = $1', [e.id]);
+    await db.query(`delete from storage.objects where name like 'qcm/%'`);
+  });
 });
 
 describe('comptes', () => {
