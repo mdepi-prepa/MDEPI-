@@ -83,17 +83,17 @@ function donneesInitiales() {
       groupes: [gA],
       modifiee_le: jour(-1, 10),
     }),
-    s('Gastro-entérologie : hémorragies digestives', 'Hépato-gastro-entérologie', jour(11, 18, 30), jour(11, 21, 30), '94 rue Sainte-Cécile', {
+    s('Gastro-entérologie : hémorragies digestives', 'Gastro-entérologie', jour(11, 18, 30), jour(11, 21, 30), '94 rue Sainte-Cécile', {
       groupes: [gB],
     }),
     s('CCB n°3 · examen blanc', 'Toutes matières', jour(15, 9), jour(15, 12), '106 rue Sainte-Cécile', { epreuve: true, zoom_url: null, groupes: [gA] }),
     s('CCB n°3 · examen blanc', 'Toutes matières', jour(16, 9), jour(16, 12), '106 rue Sainte-Cécile', { epreuve: true, zoom_url: null, groupes: [gB] }),
-    s('CCB n°2 · hépato-gastro', 'Hépato-gastro-entérologie', jour(-10, 9), jour(-10, 12), '106 rue Sainte-Cécile', { epreuve: true, zoom_url: null }),
-    s('Partiel blanc · hépato-biliaire', 'Hépato-gastro-entérologie', jour(-2, 9), jour(-2, 11), '106 rue Sainte-Cécile', { epreuve: true, zoom_url: null, groupes: [gA] }),
-    s('Partiel blanc · hépato-biliaire', 'Hépato-gastro-entérologie', jour(2, 9), jour(2, 11), '106 rue Sainte-Cécile', { epreuve: true, zoom_url: null, groupes: [gB] }),
-    s('Épreuve en ligne · HGE', 'Hépato-gastro-entérologie', minutes(-20), minutes(100), 'En ligne', { epreuve: true, zoom_url: null }),
+    s('CCB n°2 · hépato-gastro', 'Gastro-entérologie', jour(-10, 9), jour(-10, 12), '106 rue Sainte-Cécile', { epreuve: true, zoom_url: null }),
+    s('Partiel blanc · hépato-biliaire', 'Gastro-entérologie', jour(-2, 9), jour(-2, 11), '106 rue Sainte-Cécile', { epreuve: true, zoom_url: null, groupes: [gA] }),
+    s('Partiel blanc · hépato-biliaire', 'Gastro-entérologie', jour(2, 9), jour(2, 11), '106 rue Sainte-Cécile', { epreuve: true, zoom_url: null, groupes: [gB] }),
+    s('Épreuve en ligne · HGE', 'Gastro-entérologie', minutes(-20), minutes(100), 'En ligne', { epreuve: true, zoom_url: null }),
     s('Hématologie : anémies', 'Hématologie', jour(18, 18, 30), jour(18, 21, 30), '94 rue Sainte-Cécile', { annulee: true, modifiee_le: jour(0, 8) }),
-    s('Endocrinologie : diabète de type 2', 'Endocrinologie, diabétologie, nutrition', jour(-3, 18, 30), jour(-3, 21, 22), '94 rue Sainte-Cécile', {
+    s('Endocrinologie : diabète de type 2', 'Endocrinologie', jour(-3, 18, 30), jour(-3, 21, 22), '94 rue Sainte-Cécile', {
       replay_url: 'https://zoom.us/rec/share/demo',
       replay_duree_min: 172,
     }),
@@ -112,7 +112,7 @@ function donneesInitiales() {
       replay_duree_min: 150,
     }),
     s('Sémiologie cardiaque', 'Cardiologie', jour(3, 18, 30), jour(3, 20, 30), '90 rue Sainte-Cécile', { promos: ['D1'] }),
-    s('Gynécologie : grossesse extra-utérine', 'Gynécologie', jour(2, 18, 30), jour(2, 21, 30), '94 rue Sainte-Cécile', { promos: ['D4'] }),
+    s('Gynécologie : grossesse extra-utérine', 'Gynécologie Obstétrique', jour(2, 18, 30), jour(2, 21, 30), '94 rue Sainte-Cécile', { promos: ['D4'] }),
   ];
   const par = (debutTitre) => seances.find((x) => x.titre.startsWith(debutTitre));
   // CCB n°3 : même épreuve pour les groupes A et B (une série, un classement).
