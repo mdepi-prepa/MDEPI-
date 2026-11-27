@@ -286,7 +286,7 @@ body.mode-epreuve #contenu > .passage { max-width: 1100px; margin: 0 auto; }
 .num.courante { outline: 2px solid var(--encre); outline-offset: 1px; }
 .num.verrouillee { opacity: 0.4; cursor: not-allowed; }
 .passage-nav .terminer { min-height: 44px; }
-.passage-question { background: var(--carte); border: 1px solid var(--bord); border-radius: var(--rayon); padding: 16px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.passage-question { scroll-margin-top: 70px; background: var(--carte); border: 1px solid var(--bord); border-radius: var(--rayon); padding: 16px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
 .rappel { background: var(--fond); border-radius: 12px; padding: 10px 12px; font-size: 14px; }
 .rappel summary { cursor: pointer; font-weight: 600; font-size: 13px; }
 .rappel .q-enonce { margin-top: 8px; }

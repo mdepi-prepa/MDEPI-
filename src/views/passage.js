@@ -226,7 +226,13 @@ async function passage(app, s, copie) {
       if (!q.verrouillee) return true;
       await envoyer();
       if (Object.keys(attente).length) return false;
-      const c = await app.api.question(s.id, q.id).catch(() => null);
+      // La validation vient d'arriver en base : on réessaie un peu avant
+      // d'annoncer un problème de réseau.
+      let c = null;
+      for (let essai = 0; essai < 4 && !c; essai++) {
+        if (essai) await new Promise((ok) => setTimeout(ok, 400 * essai));
+        c = await app.api.question(s.id, q.id).catch(() => null);
+      }
       if (!c) return false;
       Object.assign(q, c, { verrouillee: false });
       return true;
@@ -313,7 +319,9 @@ async function passage(app, s, copie) {
         }
       }
       dessinerQuestion();
-      el.querySelector('.passage-corps').scrollIntoView({ block: 'start' });
+      // On amène la question elle-même en haut de l'écran (sur téléphone, le
+      // sommaire est au-dessus : il ne faut pas y remonter).
+      zoneQ.scrollIntoView({ block: 'start', behavior: 'smooth' });
     }
 
     // --- Résumé et envoi final ---
