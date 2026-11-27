@@ -14,6 +14,7 @@ create function auth.uid() returns uuid language sql stable
 create schema storage;
 create table storage.buckets (id text primary key, name text, public boolean);
 create table storage.objects (id uuid primary key default gen_random_uuid(), bucket_id text, name text);
+create function storage.foldername(name text) returns text[] language sql immutable as $$ select (string_to_array(name, '/'))[1:array_length(string_to_array(name, '/'), 1) - 1] $$;
 alter table storage.objects enable row level security;
 grant usage on schema public, auth, storage to authenticated;
 `;
@@ -157,6 +158,63 @@ describe('annonces', () => {
   });
 });
 
+describe('QCM des épreuves', () => {
+  const q = {};
+  it('l’équipe importe un sujet dans une épreuve partagée par deux groupes', async () => {
+    const [e] = await en(ids.prof, `insert into seances (titre, debut, fin, promos, groupes, epreuve) values ('CCB QCM A', now() - interval '30 minutes', now() + interval '1 hour', '{D2}', array[$1]::uuid[], true) returning id`, [ids.gA]);
+    const [e2] = await en(ids.prof, `insert into seances (titre, debut, fin, promos, groupes, epreuve, serie) values ('CCB QCM B', now() + interval '1 day', now() + interval '1 day 2 hours', '{D2}', array[$1]::uuid[], true, $2) returning id`, [ids.gB, e.id]);
+    q.e = e.id; q.e2 = e2.id;
+    const [d] = await en(ids.prof, `insert into dossiers (serie_id, titre) values ($1, 'DP1') returning id`, [e.id]);
+    const [q1] = await en(ids.prof, `insert into questions (serie_id, dossier_id, qti_id, ordre, type, propositions) values ($1, $2, 'Q1', 1, 'QRM', '[{"id":"A"},{"id":"B"},{"id":"C"},{"id":"D"},{"id":"E"}]') returning id`, [e.id, d.id]);
+    const [q2] = await en(ids.prof, `insert into questions (serie_id, dossier_id, qti_id, ordre, type) values ($1, $2, 'Q2', 2, 'QROC') returning id`, [e.id, d.id]);
+    q.q1 = q1.id; q.q2 = q2.id;
+    await en(ids.prof, `insert into corrections (question_id, bonnes) values ($1, '{A,B}')`, [q1.id]);
+    await en(ids.prof, `insert into corrections (question_id, reponses_qroc) values ($1, '{ECG,électrocardiogramme}')`, [q2.id]);
+  });
+  it('le sujet n’est visible que des groupes dont l’épreuve a commencé ; les corrections restent cachées', async () => {
+    expect((await en(ids.camille, 'select qti_id from questions order by ordre')).map((r) => r.qti_id)).toEqual(['Q1', 'Q2']);
+    expect(await en(ids.leo, 'select * from questions')).toEqual([]);
+    expect(await en(ids.leo, 'select * from infos_qcm($1)', [q.e2])).toEqual([{ questions: 2, dossiers: 1 }]);
+    expect(await en(ids.ines, 'select * from infos_qcm($1)', [q.e2])).toEqual([]);
+    expect(await en(ids.camille, 'select * from corrections')).toEqual([]);
+    expect(await en(ids.ines, 'select * from questions')).toEqual([]);
+  });
+  it('un étudiant d’un autre groupe ou hors horaire ne peut pas commencer', async () => {
+    await expect(en(ids.leo, 'select commencer_epreuve($1)', [q.e])).rejects.toThrow(/introuvable/);
+    await expect(en(ids.leo, 'select commencer_epreuve($1)', [q.e2])).rejects.toThrow(/fermée/);
+  });
+  it('l’étudiant commence, coche, valide ; une question validée ne bouge plus', async () => {
+    const [{ commencer_epreuve: c1 }] = await en(ids.camille, 'select commencer_epreuve($1)', [q.e]);
+    const [{ commencer_epreuve: c2 }] = await en(ids.camille, 'select commencer_epreuve($1)', [q.e]);
+    expect(c1).toBe(c2); // reprise
+    await expect(en(ids.camille, `select enregistrer_reponse($1, $2, '{Z}', '', false)`, [q.e, q.q1])).rejects.toThrow(/inconnue/);
+    await en(ids.camille, `select enregistrer_reponse($1, $2, '{A}', '', false)`, [q.e, q.q1]);
+    await en(ids.camille, `select enregistrer_reponse($1, $2, '{A,B,C}', '', true)`, [q.e, q.q1]);
+    await expect(en(ids.camille, `select enregistrer_reponse($1, $2, '{A,B}', '', true)`, [q.e, q.q1])).rejects.toThrow(/déjà validée/);
+    await en(ids.camille, `select enregistrer_reponse($1, $2, '{}', ' Électrocardiogramme ', true)`, [q.e, q.q2]);
+    await expect(en(ids.camille, `insert into reponses (copie_id, question_id) values ($1, $2)`, [c1, q.q1])).rejects.toThrow(/permission|row-level/);
+    expect((await en(ids.camille, 'select choix, validee from reponses order by modifiee_le')).length).toBe(2);
+  });
+  it('aucune note avant publication ; ensuite note, moyenne et rang', async () => {
+    expect(await en(ids.camille, 'select * from mon_resultat($1)', [q.e])).toEqual([]);
+    await expect(en(ids.camille, 'select * from resultats_epreuve($1)', [q.e])).rejects.toThrow(/équipe/);
+    await en(ids.prof, `update seances set correction_publiee = true where id = $1 or serie = $1`, [q.e]);
+    const [r] = await en(ids.camille, 'select * from mon_resultat($1)', [q.e]);
+    // Q1 : {A,B,C} contre {A,B} = 1 discordance = 0,5 ; Q2 : juste = 1 → 1,5 / 2 = 15/20
+    expect(Number(r.points)).toBe(1.5);
+    expect(Number(r.note20)).toBe(15);
+    expect(r.rang).toBe(1);
+    expect(r.effectif).toBe(1);
+    expect((await en(ids.camille, 'select * from corrections')).length).toBe(2);
+    const res = await en(ids.prof, 'select email, note20, rang from resultats_epreuve($1)', [q.e2]);
+    expect(res.map((x) => [x.email, Number(x.note20), x.rang])).toEqual([['camille@ex.fr', 15, 1]]);
+  });
+  it('une copie rendue n’est plus modifiable', async () => {
+    await en(ids.camille, 'select rendre_copie($1)', [q.e]);
+    await expect(en(ids.camille, `select enregistrer_reponse($1, $2, '{}', 'x', false)`, [q.e, q.q2])).rejects.toThrow(/rendue/);
+  });
+});
+
 describe('comptes', () => {
   it('un étudiant ne lit que son profil et pas la liste des inscrits', async () => {
     expect((await en(ids.camille, 'select email from profils')).map((r) => r.email)).toEqual(['camille@ex.fr']);
@@ -166,11 +224,11 @@ describe('comptes', () => {
     await en(ids.admin, `update inscrits set actif = false where email = 'leo@ex.fr'`);
     expect(await en(ids.leo, 'select titre from seances')).toEqual([]);
     await en(ids.admin, `update inscrits set actif = true where email = 'leo@ex.fr'`);
-    expect((await en(ids.leo, 'select titre from seances')).length).toBe(2); // « Toute la D2 » + « CCB groupe B »;
+    expect((await en(ids.leo, 'select titre from seances')).length).toBe(3); // « Toute la D2 », « CCB groupe B », « CCB QCM B »
   });
   it('changer le groupe d’un inscrit change ce qu’il voit', async () => {
     await en(ids.admin, `update inscrits set groupe_id = $1 where email = 'leo@ex.fr'`, [ids.gA]);
-    expect((await en(ids.leo, 'select titre from seances')).length).toBe(2);
+    expect((await en(ids.leo, 'select titre from seances')).length).toBe(3); // « Toute la D2 », « D2 groupe A », « CCB QCM A »
   });
   it('le passage d’année est réservé à l’admin et fait monter les promos', async () => {
     await expect(en(ids.camille, 'select passage_annee()')).rejects.toThrow(/administrateurs/);

@@ -37,7 +37,7 @@ export async function vueEpreuves(app) {
 
   const lignePassee = (s) => html`<a class="ligne-info" href="#/seance/${s.id}">
     <span class="pile-mini"><strong>${s.titre}</strong><span class="aide">${dateCourte(s.debut)}${equipe ? ` · ${cible(s)}` : ''}</span></span>
-    <span class="lien-accent">Sujet et correction ${icones.chevron(14)}</span>
+    <span class="lien-accent">${s.correction_publiee ? 'Note et correction' : 'Sujet et correction'} ${icones.chevron(14)}</span>
   </a>`;
 
   return {
@@ -53,7 +53,6 @@ export async function vueEpreuves(app) {
         <h2 class="titre-section">Passées</h2>
         ${passees.length ? html`<div class="carte liste">${passees.map(lignePassee)}</div>` : html`<div class="carte">${vide('Aucune épreuve passée.')}</div>`}
       </section>
-      <p class="aide">Bientôt : passer l'épreuve dans l'app, avec la note, la moyenne de la promo et votre rang.</p>
     </div>`,
   };
 }

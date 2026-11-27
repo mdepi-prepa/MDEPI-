@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testPart xmlns="http://www.imsglobal.org/xsd/imsqti_v2p1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" identifier="DPPOOL_4302636" navigationMode="linear" submissionMode="individual" xsi:schemaLocation="http://www.imsglobal.org/xsd/imsqti_v2p1 http://www.imsglobal.org/xsd/qti/qtiv2p1/imsqti_v2p1.xsd">
+  <assessmentSection identifier="DPPOOL_SECTION_4302636" required="false" fixed="false" title="CONF HGE D3 DP4 (2026-2027)" visible="true" keepTogether="true">
+    <assessmentItemRef identifier="MULTIPLECHOICE_QUESTION_4302637" required="true" fixed="true" href="MULTIPLECHOICE_QUESTION_4302637.xml">
+      <weight identifier="WEIGHT" value="1"/>
+    </assessmentItemRef>
+    <assessmentItemRef identifier="MULTIPLECHOICE_QUESTION_4302645" required="true" fixed="true" href="MULTIPLECHOICE_QUESTION_4302645.xml">
+      <weight identifier="WEIGHT" value="1"/>
+    </assessmentItemRef>
+    <assessmentItemRef identifier="MULTIPLECHOICE_QUESTION_4302649" required="true" fixed="true" href="MULTIPLECHOICE_QUESTION_4302649.xml">
+      <weight identifier="WEIGHT" value="1"/>
+    </assessmentItemRef>
+    <assessmentItemRef identifier="MULTIPLECHOICE_QUESTION_4302653" required="true" fixed="true" href="MULTIPLECHOICE_QUESTION_4302653.xml">
+      <weight identifier="WEIGHT" value="1"/>
+    </assessmentItemRef>
+    <assessmentItemRef identifier="MULTIPLECHOICE_QUESTION_4302655" required="true" fixed="true" href="MULTIPLECHOICE_QUESTION_4302655.xml">
+      <weight identifier="WEIGHT" value="1"/>
+    </assessmentItemRef>
+    <assessmentItemRef identifier="MULTIPLECHOICE_QUESTION_4302666" required="true" fixed="true" href="MULTIPLECHOICE_QUESTION_4302666.xml">
+      <weight identifier="WEIGHT" value="1"/>
+    </assessmentItemRef>
+  </assessmentSection>
+</testPart>

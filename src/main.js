@@ -18,6 +18,8 @@ import { vueAdminComptes } from './views/admin/comptes.js';
 import { vueAdminSeances, vueAdminSeance } from './views/admin/seances.js';
 import { vueAdminAnnonces } from './views/admin/annonces.js';
 import { vueAdminEpreuves } from './views/admin/epreuves.js';
+import { vuePassage, vueMaCorrection } from './views/passage.js';
+import { vueAdminQcm, vueAdminCorrige, vueAdminResultats, vueAdminCopie } from './views/admin/qcm.js';
 
 // Table des écrans : #/chemin → fonction d'affichage.
 const ROUTES = [
@@ -26,6 +28,8 @@ const ROUTES = [
   ['planning/replays', (app) => vuePlanning(app, { onglet: 'replays' })],
   ['seance/:id', vueSeance],
   ['epreuves', vueEpreuves],
+  ['epreuve/:id', vuePassage],
+  ['epreuve/:id/correction', vueMaCorrection],
   ['annonces', vueAnnonces],
   ['entrainement', (app) => vueBientot(app, 'Entraînement')],
   ['cartes', (app) => vueBientot(app, 'Cartes')],
@@ -38,6 +42,10 @@ const ROUTES = [
   ['admin/seances/copie/:copie', (app, p) => vueAdminSeance(app, { id: 'nouvelle', ...p }), 'equipe'],
   ['admin/epreuves', vueAdminEpreuves, 'equipe'],
   ['admin/epreuves/nouvelle', (app) => vueAdminSeance(app, { id: 'nouvelle', epreuve: true }), 'equipe'],
+  ['admin/epreuves/:id/qcm', vueAdminQcm, 'equipe'],
+  ['admin/epreuves/:id/corrige', vueAdminCorrige, 'equipe'],
+  ['admin/epreuves/:id/resultats', vueAdminResultats, 'equipe'],
+  ['admin/epreuves/:id/copie/:user', vueAdminCopie, 'equipe'],
   ['admin/annonces', vueAdminAnnonces, 'admin'],
 ];
 
@@ -117,7 +125,7 @@ async function afficher() {
 
   const route = trouverRoute(chemin) || trouverRoute('accueil');
   const refuse = (route.acces === 'equipe' && !estEquipe(app.profil)) || (route.acces === 'admin' && app.profil.role !== 'admin');
-  const onglet = route.motif.startsWith('admin') ? 'admin' : route.motif.split('/')[0].replace('seance', 'planning');
+  const onglet = route.motif.startsWith('admin') ? 'admin' : route.motif.split('/')[0].replace(/^seance$/, 'planning').replace(/^epreuve$/, 'epreuves');
 
   document.documentElement.style.setProperty('--accent', couleurPromo(app.profil.promo));
   if (!racine.querySelector('.coquille')) {

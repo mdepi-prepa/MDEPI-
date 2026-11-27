@@ -1,7 +1,7 @@
 # App MDEPi
 
 Web app installable (PWA) des étudiants de la MDEPi, prépa EDN à Marseille.
-Lot 1 (socle V1.0) : comptes, promos et groupes de rotation, Accueil, Planning (à venir et replays), Épreuves par groupe, annonces, back-office, installation sur le téléphone.
+Lot 1 (socle V1.0) : comptes, promos et groupes de rotation, Accueil, Planning (à venir et replays), Épreuves par groupe passées dans l'app (QCM importés de Théia, notation EDN, classement, sauvegarde des copies), annonces, back-office, installation sur le téléphone.
 
 Services : **Supabase** (base de données, connexion, fichiers), **Brevo** (envoi des e-mails de connexion, service français) et **Cloudflare Pages** (hébergement).
 
@@ -101,7 +101,12 @@ GitHub Pages n'est pas conseillé ici : pour un dépôt privé, il demande un ab
 | Replay Zoom | Dans la séance : coller le lien de partage de l'enregistrement Zoom (*Zoom › Enregistrements › Partager*) et sa durée |
 | Supports, diapos de correction | Dans la séance : déposer le PDF (50 Mo maximum) |
 | Annonce | Back-office › Annonces |
-| Épreuves (CCB, examens blancs) | Back-office › Épreuves. Une épreuve par groupe et par date ; « Dupliquer » pour la reposer à un autre groupe. Sujet et correction en PDF dans l'épreuve. Les étudiants les voient dans l'onglet Épreuves |
+| Épreuves (CCB, examens blancs) | Back-office › Épreuves. Une épreuve par groupe et par date ; « Dupliquer » pour la reposer à un autre groupe (même QCM, classement commun). Sujet et correction en PDF possibles aussi. Les étudiants les voient dans l'onglet Épreuves |
+| QCM d'une épreuve | Back-office › Épreuves › colonne QCM. Dans Théia, exporter les dossiers en QTI 2.1 et déposer le ZIP : DP, KFP, QRU/QRM/QROC, réponses attendues et commentaires sont repris. Remplaçable tant qu'aucun étudiant n'a commencé |
+| Publier la correction et les notes | Page QCM de l'épreuve › « Publier la correction et les notes » (à faire quand tous les groupes ont composé) |
+| Résultats, sauvegardes | Page QCM › Résultats : classement, réussite par question, notes (CSV), copies avec les cases cochées (CSV), sauvegarde complète (JSON), copies corrigées imprimables en PDF |
+
+**Passage d'une épreuve** (côté étudiant, sur le modèle de Théia) : page d'informations (ouverture, fermeture, temps restant), puis questions numérotées par dossier. Dans un dossier progressif, il faut valider une question pour voir la suivante ; une question validée n'est plus modifiable. Chaque clic est enregistré ; sans réseau, les réponses attendent sur le téléphone et partent au retour de la connexion. « Tout envoyer et terminer » montre un résumé ; à l'heure de fin, la copie part toute seule. Barème : QRM 1 point sans erreur, 0,5 avec une, 0,2 avec deux, 0 au-delà ; QRU et QROC 1 point (QROC sans tenir compte des majuscules, accents et espaces). Note sur 20, moyenne et rang sont calculés par la base sur toute la série (tous les groupes).
 
 Rôles : **admin** (tout), **enseignant** (planning, replays, documents), **étudiant**. Un étudiant ne voit que les séances de sa promo et de son groupe (une séance sans groupe coché concerne toute la promo), et les annonces de sa promo.
 
@@ -115,10 +120,12 @@ src/main.js                démarrage, navigation (#/accueil, #/planning…), me
 src/styles.css             toute la mise en forme (couleurs de la charte en haut)
 src/views/                 un fichier par écran
   accueil.js planning.js epreuves.js seance.js annonces.js profil.js connexion.js bientot.js
-  admin/                   back-office : comptes.js seances.js epreuves.js annonces.js
+  passage.js qcm-rendu.js  passage d'une épreuve, copie corrigée (affichage façon Théia)
+  admin/                   back-office : comptes.js seances.js epreuves.js qcm.js annonces.js
 src/data/supabase.js       lecture/écriture dans Supabase
 src/data/demo.js           mêmes fonctions avec des données fictives (mode démo)
-src/lib/                   outils : dates (heure de Paris), CSV, .ics, règles d'accès, icônes
+src/lib/                   outils : dates (heure de Paris), CSV, .ics, règles d'accès, icônes,
+                           qti.js (import Théia), bareme.js (notation EDN), qcm.js (exports)
 supabase/schema.sql        tables, règles d'accès (RLS), triggers
 public/                    icônes, manifeste et service worker (installation, hors connexion)
 tests/                     tests automatiques (npm test)
@@ -126,7 +133,7 @@ tests/                     tests automatiques (npm test)
 
 Pas de framework : chaque écran est une fonction qui renvoie du HTML (avec `html\`…\``, qui protège contre l'injection de code) et, si besoin, une fonction `monter` qui branche les clics. Pour ajouter un écran : créer `src/views/mon-ecran.js` et l'ajouter à la table `ROUTES` de `src/main.js`.
 
-**Sécurité** : c'est la base qui décide qui voit quoi (fichier `schema.sql`, section 4), pas l'app. Les tests `tests/schema.test.js` le vérifient dans un vrai Postgres. Si vous modifiez une règle, modifiez aussi `src/lib/acces.js` (utilisé par le mode démo) et lancez `npm test`.
+**Sécurité** : c'est la base qui décide qui voit quoi (fichier `schema.sql`, sections 4 et 6), pas l'app. Les bonnes réponses sont dans une table à part, invisible des étudiants avant publication ; les réponses ne s'écrivent que par des fonctions qui vérifient l'horaire de l'épreuve. Le barème existe en SQL (`points`) et en JavaScript (`bareme.js`) : les garder identiques. Les tests `tests/schema.test.js` le vérifient dans un vrai Postgres. Si vous modifiez une règle, modifiez aussi `src/lib/acces.js` (utilisé par le mode démo) et lancez `npm test`.
 
 ---
 
@@ -138,4 +145,5 @@ Pas de framework : chaque écran est une fonction qui renvoie du HTML (avec `htm
 - **Double authentification pour l'équipe** : Supabase la propose gratuitement (TOTP), l'écran d'activation reste à faire.
 - **Hors connexion** : l'app s'ouvre sans réseau, mais les données ne sont pas encore gardées en cache (prévu avec les cartes et les dossiers au lot 1.1).
 - **Si un jour on repasse en gratuit** : Supabase gratuit limite à 500 Mo de base et 1 Go de fichiers, sans sauvegarde, et met en pause un projet inutilisé 7 jours ; l'offre gratuite de Brevo (300 e-mails par jour, avec le logo Brevo) suffit aussi.
-- **Lot 1.1** : import QTI Théia (le parseur testé est prêt), entraînement, cartes, progrès, épreuves avec classement.
+- **Épreuves** : pondération toujours à 1 (comme dans l'export Théia) ; les images des QCM sont stockées dans Supabase Storage (dossier `qcm/`). Pas de mode « surveillé » (plein écran forcé, détection de changement d'onglet).
+- **Lot 1.1** : entraînement (avec les QCM importés), cartes, progrès.

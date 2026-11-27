@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<assessmentItem xmlns="http://www.imsglobal.org/xsd/imsqti_v2p1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" identifier="MULTIPLECHOICE_QUESTION_4302653" title="Question à réponses multiples" timeDependent="false" adaptive="false" toolName="Theia" xsi:schemaLocation="http://www.imsglobal.org/xsd/imsqti_v2p1 http://www.imsglobal.org/xsd/qti/qtiv2p1/imsqti_v2p1.xsd">
+  <responseDeclaration identifier="RESPONSE" cardinality="multiple" baseType="identifier">
+    <correctResponse>
+      <value>CHOICE_9018016</value>
+      <value>CHOICE_9018017</value>
+      <value>CHOICE_9018018</value>
+    </correctResponse>
+  </responseDeclaration>
+  <outcomeDeclaration identifier="SCORE" cardinality="single" baseType="integer">
+    <defaultValue>
+      <value>0</value>
+    </defaultValue>
+  </outcomeDeclaration>
+  <itemBody>
+    <choiceInteraction responseIdentifier="MULTIPLECHOICE_QUESTION_4302653" maxChoices="5">
+      <prompt>
+        <div>&lt;p&gt;&lt;strong&gt; &lt;/strong&gt;&lt;span style="font-size:20pt;font-family:Calibri;color:#000000;"&gt;Q4 :&lt;/span&gt;&lt;span style="font-size:20pt;font-family:Calibri;color:#000000;"&gt; Quelques heures après son admission, malgré l'antibiothérapie et le remplissage initial, le patient présente une &lt;/span&gt;&lt;span style="font-size:20pt;font-family:Calibri;color:#000000;"&gt;dégradation hémodynamique.&lt;/span&gt;&lt;span style="font-size:20pt;font-family:Calibri;color:#000000;"&gt;&lt;br /&gt;Les nouvelles constantes sont :&lt;br /&gt;&lt;/span&gt;&lt;span style="font-size:20pt;font-family:Calibri;color:#000000;"&gt;TA 80/45 &lt;/span&gt;&lt;span style="font-size:20pt;font-family:Calibri;color:#000000;"&gt;mmHg&lt;/span&gt;&lt;span style="font-size:20pt;font-family:Calibri;color:#000000;"&gt;, FC 125/min, T° 39,2 °C, FR 28/min, Lactate 3,8 &lt;/span&gt;&lt;span style="font-size:20pt;font-family:Calibri;color:#000000;"&gt;mmol&lt;/span&gt;&lt;span style="font-size:20pt;font-family:Calibri;color:#000000;"&gt;/L&lt;br /&gt;&lt;/span&gt;&lt;span style="font-size:20pt;font-family:Calibri;color:#000000;"&gt;Il présente des &lt;/span&gt;&lt;span style="font-size:20pt;font-family:Calibri;color:#000000;"&gt;marbrures&lt;/span&gt;&lt;span style="font-size:20pt;font-family:Calibri;color:#000000;"&gt; et une &lt;/span&gt;&lt;span style="font-size:20pt;font-family:Calibri;color:#000000;"&gt;oligurie&lt;/span&gt;&lt;span style="font-size:20pt;font-family:Calibri;color:#000000;"&gt;.&lt;br /&gt;Malgré une réanimation volémique adaptée, une perfusion de noradrénaline est nécessaire pour maintenir une PAM ≥ 65 &lt;/span&gt;&lt;span style="font-size:20pt;font-family:Calibri;color:#000000;"&gt;mmHg&lt;/span&gt;&lt;span style="font-size:20pt;font-family:Calibri;color:#000000;"&gt;.&lt;br /&gt;Concernant cette aggravation, quelles propositions sont exactes ?&lt;br /&gt;&lt;/span&gt;&lt;/p&gt;</div>
+      </prompt>
+      <simpleChoice identifier="CHOICE_9018016">
+        <div>&lt;div style="margin-top:5.76pt;margin-bottom:0pt;text-align:left;"&gt;&lt;span style="font-size:24pt;"&gt;&lt;span style="font-family:Arial;"&gt;•&lt;/span&gt;&lt;/span&gt;&lt;span style="font-size:24pt;font-family:Calibri;color:#000000;"&gt;A. Le patient présente un choc septique.&lt;/span&gt;&lt;/div&gt;</div>
+      </simpleChoice>
+      <simpleChoice identifier="CHOICE_9018017">
+        <div>&lt;div style="margin-top:5.76pt;margin-bottom:0pt;text-align:left;"&gt;&lt;span style="font-size:24pt;"&gt;&lt;span style="font-family:Arial;"&gt;•&lt;/span&gt;&lt;/span&gt;&lt;span style="font-size:24pt;font-family:Calibri;color:#000000;"&gt;B. Il s'agit d'une angiocholite grave &lt;/span&gt;&lt;/div&gt;</div>
+      </simpleChoice>
+      <simpleChoice identifier="CHOICE_9018018">
+        <div>&lt;div style="margin-top:5.76pt;margin-bottom:0pt;text-align:left;"&gt;&lt;span style="font-size:24pt;"&gt;&lt;span style="font-family:Arial;"&gt;•&lt;/span&gt;&lt;/span&gt;&lt;span style="font-size:24pt;font-family:Calibri;color:#000000;"&gt;C. Le patient nécessite une prise en charge en réanimation.&lt;/span&gt;&lt;/div&gt;</div>
+      </simpleChoice>
+      <simpleChoice identifier="CHOICE_9018019">
+        <div>&lt;div style="margin-top:5.76pt;margin-bottom:0pt;text-align:left;"&gt;&lt;span style="font-size:24pt;"&gt;&lt;span style="font-family:Arial;"&gt;•&lt;/span&gt;&lt;/span&gt;&lt;span style="font-size:24pt;font-family:Calibri;color:#000000;"&gt;D. Le drainage biliaire doit être différé jusqu'à la normalisation des marqueurs inflammatoires.&lt;/span&gt;&lt;/div&gt;</div>
+      </simpleChoice>
+      <simpleChoice identifier="CHOICE_9018020">
+        <div>&lt;div style="margin-top:5.76pt;margin-bottom:0pt;text-align:left;"&gt;&lt;span style="font-size:24pt;"&gt;&lt;span style="font-family:Arial;"&gt;•&lt;/span&gt;&lt;/span&gt;&lt;span style="font-size:24pt;font-family:Calibri;color:#000000;"&gt;E. L'absence de documentation bactériologique permet d'éliminer une origine septique.&lt;/span&gt;&lt;/div&gt;</div>
+      </simpleChoice>
+    </choiceInteraction>
+  </itemBody>
+  <modalFeedback outcomeIdentifier="COMMENT_QUESTION" identifier="COMMENT_QUESTION" showHide="show">
+    <div>&lt;div style="margin-top:5.76pt;margin-bottom:0pt;text-align:left;"&gt;&lt;span style="font-size:24pt;"&gt;&lt;span style="font-family:Arial;"&gt;•&lt;/span&gt;&lt;/span&gt;&lt;span style="font-size:24pt;font-family:Calibri;color:#00b050;"&gt;A. Le patient présente un choc septique.&lt;/span&gt;&lt;/div&gt;
+&lt;div style="margin-top:5.76pt;margin-bottom:0pt;text-align:left;"&gt;&lt;span style="font-size:24pt;"&gt;&lt;span style="font-family:Arial;"&gt;•&lt;/span&gt;&lt;/span&gt;&lt;span style="font-size:24pt;font-family:Calibri;color:#00b050;"&gt;B. Il s'agit d'une angiocholite grave &lt;/span&gt;&lt;/div&gt;
+&lt;div style="margin-top:5.76pt;margin-bottom:0pt;text-align:left;"&gt;&lt;span style="font-size:24pt;"&gt;&lt;span style="font-family:Arial;"&gt;•&lt;/span&gt;&lt;/span&gt;&lt;span style="font-size:24pt;font-family:Calibri;color:#00b050;"&gt;C. Le patient nécessite une prise en charge en réanimation.&lt;/span&gt;&lt;/div&gt;
+&lt;div style="margin-top:5.76pt;margin-bottom:0pt;text-align:left;"&gt;&lt;span style="font-size:24pt;"&gt;&lt;span style="font-family:Arial;"&gt;•&lt;/span&gt;&lt;/span&gt;&lt;span style="font-size:24pt;font-family:Calibri;color:#FF0000;"&gt;D. Le drainage biliaire doit être différé jusqu'à la normalisation des marqueurs inflammatoires. &lt;/span&gt;&lt;span style="font-size:24pt;font-family:Calibri;color:#FF0000;font-weight:bold;"&gt;Faux ! Un drainage biliaire en extrême urgence est nécessaire, idéalement dans les 12 heures en cas de choc septique&lt;/span&gt;&lt;/div&gt;
+&lt;div style="margin-top:5.76pt;margin-bottom:0pt;text-align:left;"&gt;&lt;span style="font-size:24pt;"&gt;&lt;span style="font-family:Arial;"&gt;•&lt;/span&gt;&lt;/span&gt;&lt;span style="font-size:24pt;font-family:Calibri;color:#FF0000;"&gt;E. L'absence de documentation bactériologique permet d'éliminer une origine septique.&lt;/span&gt;&lt;/div&gt;</div>
+  </modalFeedback>
+</assessmentItem>

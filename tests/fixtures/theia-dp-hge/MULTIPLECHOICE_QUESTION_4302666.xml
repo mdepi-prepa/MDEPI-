@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<assessmentItem xmlns="http://www.imsglobal.org/xsd/imsqti_v2p1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" identifier="MULTIPLECHOICE_QUESTION_4302666" title="Question à réponses multiples" timeDependent="false" adaptive="false" toolName="Theia" xsi:schemaLocation="http://www.imsglobal.org/xsd/imsqti_v2p1 http://www.imsglobal.org/xsd/qti/qtiv2p1/imsqti_v2p1.xsd">
+  <responseDeclaration identifier="RESPONSE" cardinality="multiple" baseType="identifier">
+    <correctResponse>
+      <value>CHOICE_9018056</value>
+      <value>CHOICE_9018058</value>
+      <value>CHOICE_9018060</value>
+    </correctResponse>
+  </responseDeclaration>
+  <outcomeDeclaration identifier="SCORE" cardinality="single" baseType="integer">
+    <defaultValue>
+      <value>0</value>
+    </defaultValue>
+  </outcomeDeclaration>
+  <itemBody>
+    <choiceInteraction responseIdentifier="MULTIPLECHOICE_QUESTION_4302666" maxChoices="5">
+      <prompt>
+        <div>&lt;p&gt;&lt;strong&gt; &lt;/strong&gt;&lt;span style="font-size:24pt;font-family:Calibri;color:#000000;"&gt;Q6 :&lt;/span&gt;&lt;span style="font-size:24pt;font-family:Calibri;color:#000000;"&gt; L'évolution est favorable après drainage biliaire, antibiothérapie et prise en charge en réanimation.&lt;br /&gt;Le patient est désormais apyrétique et stable sur le plan hémodynamique.&lt;br /&gt;Une nouvelle prothèse biliaire plastique temporaire a été mise en place. Plusieurs calculs résiduels restent présents dans la voie biliaire principale.&lt;/span&gt;&lt;span style="font-size:24pt;font-family:Calibri;color:#000000;"&gt;&lt;br /&gt;&lt;/span&gt;&lt;span style="font-size:24pt;font-family:Calibri;color:#000000;"&gt;Quelles propositions sont exactes concernant la prise en charge ultérieure ?&lt;/span&gt;&lt;/p&gt;</div>
+      </prompt>
+      <simpleChoice identifier="CHOICE_9018056">
+        <div>&lt;div style="margin-top:5.76pt;margin-bottom:0pt;text-align:left;"&gt;&lt;span style="font-size:24pt;"&gt;&lt;span style="font-family:Arial;"&gt;•&lt;/span&gt;&lt;/span&gt;&lt;span style="font-size:24pt;font-family:Calibri;color:#000000;"&gt;A. Une nouvelle CPRE doit être programmée pour obtenir la clairance de la voie biliaire principale et retirer la prothèse temporaire.&lt;/span&gt;&lt;/div&gt;</div>
+      </simpleChoice>
+      <simpleChoice identifier="CHOICE_9018057">
+        <div>&lt;div style="margin-top:5.76pt;margin-bottom:0pt;text-align:left;"&gt;&lt;span style="font-size:24pt;"&gt;&lt;span style="font-family:Arial;"&gt;•&lt;/span&gt;&lt;/span&gt;&lt;span style="font-size:24pt;font-family:Calibri;color:#000000;"&gt;B. La prothèse plastique peut être conservée définitivement sans surveillance puisque le patient est asymptomatique.&lt;/span&gt;&lt;/div&gt;</div>
+      </simpleChoice>
+      <simpleChoice identifier="CHOICE_9018058">
+        <div>&lt;div style="margin-top:5.76pt;margin-bottom:0pt;text-align:left;"&gt;&lt;span style="font-size:24pt;"&gt;&lt;span style="font-family:Arial;"&gt;•&lt;/span&gt;&lt;/span&gt;&lt;span style="font-size:24pt;font-family:Calibri;color:#000000;"&gt;C. Une cholécystectomie doit être proposée après stabilisation clinique et traitement de l'obstacle cholédocien, si le patient est opérable.&lt;/span&gt;&lt;/div&gt;</div>
+      </simpleChoice>
+      <simpleChoice identifier="CHOICE_9018059">
+        <div>&lt;div style="margin-top:5.76pt;margin-bottom:0pt;text-align:left;"&gt;&lt;span style="font-size:24pt;"&gt;&lt;span style="font-family:Arial;"&gt;•&lt;/span&gt;&lt;/span&gt;&lt;span style="font-size:24pt;font-family:Calibri;color:#000000;"&gt;D. La résolution de l'infection après antibiothérapie garantit l'absence de récidive.&lt;/span&gt;&lt;/div&gt;</div>
+      </simpleChoice>
+      <simpleChoice identifier="CHOICE_9018060">
+        <div>&lt;div style="margin-top:5.76pt;margin-bottom:0pt;text-align:left;"&gt;&lt;span style="font-size:24pt;"&gt;&lt;span style="font-family:Arial;"&gt;•&lt;/span&gt;&lt;/span&gt;&lt;span style="font-size:24pt;font-family:Calibri;color:#000000;"&gt;E. Le patient doit être informé de la nécessité d'un retrait ou d'un échange programmé de sa prothèse biliaire.&lt;/span&gt;&lt;/div&gt;</div>
+      </simpleChoice>
+    </choiceInteraction>
+  </itemBody>
+  <modalFeedback outcomeIdentifier="COMMENT_QUESTION" identifier="COMMENT_QUESTION" showHide="show">
+    <div>&lt;div style="margin-top:5.76pt;margin-bottom:0pt;text-align:left;"&gt;&lt;span style="font-size:24pt;"&gt;&lt;span style="font-family:Arial;"&gt;•&lt;/span&gt;&lt;/span&gt;&lt;span style="font-size:24pt;font-family:Calibri;color:#00b050;"&gt;A. Une nouvelle CPRE doit être programmée pour obtenir la clairance de la voie biliaire principale et retirer la prothèse temporaire.&lt;/span&gt;&lt;/div&gt;
+&lt;div style="margin-top:5.76pt;margin-bottom:0pt;text-align:left;"&gt;&lt;span style="font-size:24pt;"&gt;&lt;span style="font-family:Arial;"&gt;•&lt;/span&gt;&lt;/span&gt;&lt;span style="font-size:24pt;font-family:Calibri;color:#FF0000;"&gt;B. La prothèse plastique peut être conservée définitivement sans surveillance puisque le patient est asymptomatique. &lt;/span&gt;&lt;span style="font-size:24pt;font-family:Calibri;color:#FF0000;font-weight:bold;"&gt;Faux ! Risque de nouvelle obstruction et de récidive d’angiocholite&lt;/span&gt;&lt;/div&gt;
+&lt;div style="margin-top:5.76pt;margin-bottom:0pt;text-align:left;"&gt;&lt;span style="font-size:24pt;"&gt;&lt;span style="font-family:Arial;"&gt;•&lt;/span&gt;&lt;/span&gt;&lt;span style="font-size:24pt;font-family:Calibri;color:#00b050;"&gt;C. Une &lt;/span&gt;&lt;span style="font-size:24pt;font-family:Calibri;color:#00b050;font-weight:bold;"&gt;cholécystectomie&lt;/span&gt;&lt;span style="font-size:24pt;font-family:Calibri;color:#00b050;"&gt; doit être proposée après stabilisation clinique et traitement de l'obstacle cholédocien, si le patient est opérable.&lt;/span&gt;&lt;/div&gt;
+&lt;div style="margin-top:5.76pt;margin-bottom:0pt;text-align:left;"&gt;&lt;span style="font-size:24pt;"&gt;&lt;span style="font-family:Arial;"&gt;•&lt;/span&gt;&lt;/span&gt;&lt;span style="font-size:24pt;font-family:Calibri;color:#FF0000;"&gt;D. La résolution de l'infection après antibiothérapie garantit l'absence de récidive.&lt;/span&gt;&lt;/div&gt;
+&lt;div style="margin-top:5.76pt;margin-bottom:0pt;text-align:left;"&gt;&lt;span style="font-size:24pt;"&gt;&lt;span style="font-family:Arial;"&gt;•&lt;/span&gt;&lt;/span&gt;&lt;span style="font-size:24pt;font-family:Calibri;color:#00b050;"&gt;E. Le patient doit être informé de la nécessité d'un &lt;/span&gt;&lt;span style="font-size:24pt;font-family:Calibri;color:#00b050;font-weight:bold;"&gt;retrait&lt;/span&gt;&lt;span style="font-size:24pt;font-family:Calibri;color:#00b050;"&gt; ou d'un &lt;/span&gt;&lt;span style="font-size:24pt;font-family:Calibri;color:#00b050;font-weight:bold;"&gt;échange programmé &lt;/span&gt;&lt;span style="font-size:24pt;font-family:Calibri;color:#00b050;"&gt;de sa &lt;/span&gt;&lt;span style="font-size:24pt;font-family:Calibri;color:#00b050;font-weight:bold;"&gt;prothèse biliaire&lt;/span&gt;&lt;span style="font-size:24pt;font-family:Calibri;color:#00b050;"&gt;.&lt;/span&gt;&lt;span style="font-size:24pt;font-family:Calibri;color:#00b050;font-weight:bold;"&gt; Vrai ! &lt;/span&gt;&lt;span style="font-size:24pt;font-family:Calibri;color:#00b050;"&gt;Ce changement ou retrait doit avoir lieu dans les 3 à 6 mois (pas à savoir)&lt;/span&gt;&lt;/div&gt;</div>
+  </modalFeedback>
+</assessmentItem>

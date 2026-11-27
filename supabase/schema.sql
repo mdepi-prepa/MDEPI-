@@ -275,3 +275,267 @@ drop policy if exists documents_fichiers_equipe on storage.objects;
 create policy documents_fichiers_equipe on storage.objects for all to authenticated
   using (bucket_id = 'documents' and public.est_equipe())
   with check (bucket_id = 'documents' and public.est_equipe());
+
+-- =====================================================================
+-- 6. QCM des épreuves : dossiers progressifs importés de Théia, copies
+--    des étudiants, correction automatique (barème EDN), classement.
+-- =====================================================================
+
+-- Une même épreuve posée à plusieurs groupes (bouton « Dupliquer ») forme
+-- une série : les séances partagent le même QCM et le même classement.
+-- serie = id de la séance d'origine (null pour la séance d'origine elle-même).
+alter table public.seances add column if not exists serie uuid references public.seances(id) on delete set null;
+alter table public.seances add column if not exists correction_publiee boolean not null default false;
+
+create or replace function public.serie_de(s public.seances)
+returns uuid language sql immutable as $$ select coalesce(s.serie, s.id) $$;
+
+create table if not exists public.dossiers (
+  id uuid primary key default gen_random_uuid(),
+  serie_id uuid not null references public.seances(id) on delete cascade,
+  titre text not null,
+  matiere text not null default '',
+  contexte text not null default '',        -- énoncé commun du cas clinique (texte)
+  ordre integer not null default 0,
+  unique (serie_id, titre)
+);
+
+-- Questions SANS les bonnes réponses (celles-ci sont dans « corrections »).
+create table if not exists public.questions (
+  id uuid primary key default gen_random_uuid(),
+  serie_id uuid not null references public.seances(id) on delete cascade,
+  dossier_id uuid not null references public.dossiers(id) on delete cascade,
+  qti_id text not null,                     -- identifiant Théia : un nouvel import met à jour la question
+  ordre integer not null,
+  type text not null check (type in ('QRU','QRM','QROC')),
+  enonce text not null default '',          -- HTML nettoyé à l'import
+  propositions jsonb not null default '[]', -- [{ "id": "A1", "texte": "<p>…</p>" }]
+  unique (serie_id, qti_id)
+);
+
+create table if not exists public.corrections (
+  question_id uuid primary key references public.questions(id) on delete cascade,
+  bonnes text[] not null default '{}',          -- id des propositions justes (QRU/QRM)
+  reponses_qroc text[] not null default '{}',   -- réponses acceptées (QROC)
+  explications jsonb not null default '{}',     -- { "A1": "<p>…</p>" }
+  commentaire text not null default ''
+);
+
+create table if not exists public.copies (
+  id uuid primary key default gen_random_uuid(),
+  seance_id uuid not null references public.seances(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  commencee_le timestamptz not null default now(),
+  rendue_le timestamptz,
+  unique (seance_id, user_id)
+);
+
+create table if not exists public.reponses (
+  copie_id uuid not null references public.copies(id) on delete cascade,
+  question_id uuid not null references public.questions(id) on delete cascade,
+  choix text[] not null default '{}',
+  texte text not null default '',
+  validee boolean not null default false,   -- validée = plus modifiable (pas de retour en arrière)
+  modifiee_le timestamptz not null default now(),
+  primary key (copie_id, question_id)
+);
+
+-- Délai de grâce après l'heure de fin (réseau lent, envoi en attente).
+create or replace function public.epreuve_ouverte(s public.seances)
+returns boolean language sql stable as $$
+  select s.epreuve and not s.annulee and now() >= s.debut and now() <= s.fin + interval '2 minutes'
+$$;
+
+-- Le sujet d'une série est-il visible pour moi ? (équipe : toujours ;
+-- étudiant : une séance de la série le concerne et elle a commencé)
+create or replace function public.peut_voir_sujet(p_serie uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select public.est_equipe() or exists (
+    select 1 from public.seances s
+    where public.serie_de(s) = p_serie and public.peut_voir_seance(s) and now() >= s.debut)
+$$;
+
+create or replace function public.peut_voir_correction(p_serie uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select public.est_equipe() or exists (
+    select 1 from public.seances s
+    where public.serie_de(s) = p_serie and public.peut_voir_seance(s) and s.correction_publiee)
+$$;
+
+-- Barème MDEPi (type EDN). QRM : 0 discordance = 1, 1 = 0,5, 2 = 0,2, 3+ = 0.
+-- QRU : 1 si la bonne réponse seule est cochée. QROC : 1 si la réponse fait
+-- partie des réponses acceptées (sans tenir compte des majuscules, accents, espaces).
+-- Même calcul en JavaScript dans src/lib/bareme.js : les garder identiques.
+create or replace function public.normaliser(t text)
+returns text language sql immutable as $$
+  select regexp_replace(lower(translate(coalesce(t, ''),
+    'ÀÂÄÁÃÉÈÊËÍÌÎÏÓÒÔÖÕÚÙÛÜÇàâäáãéèêëíìîïóòôöõúùûüç',
+    'AAAAAEEEEIIIIOOOOOUUUUCaaaaaeeeeiiiiooooouuuuc')), '\s+', ' ', 'g')
+$$;
+
+create or replace function public.points(p_type text, p_propositions jsonb, p_bonnes text[], p_qroc text[], p_choix text[], p_texte text)
+returns numeric language plpgsql immutable as $$
+declare d integer;
+begin
+  if p_type = 'QROC' then
+    return case when btrim(public.normaliser(p_texte)) <> '' and exists (
+      select 1 from unnest(p_qroc) a where btrim(public.normaliser(a)) = btrim(public.normaliser(p_texte))) then 1 else 0 end;
+  end if;
+  select count(*) into d from jsonb_array_elements(p_propositions) p
+   where ((p->>'id') = any (coalesce(p_choix, '{}'))) <> ((p->>'id') = any (p_bonnes));
+  if p_type = 'QRU' then return case when d = 0 then 1 else 0 end; end if;
+  return case d when 0 then 1 when 1 then 0.5 when 2 then 0.2 else 0 end;
+end;
+$$;
+
+-- Note d'une copie : points, total, note sur 20.
+create or replace function public.note_copie(p_copie uuid)
+returns table (points numeric, total integer, note20 numeric)
+language sql stable security definer set search_path = public as $$
+  with c as (select c.*, public.serie_de(s) as serie from public.copies c join public.seances s on s.id = c.seance_id where c.id = p_copie)
+  select coalesce(sum(public.points(q.type, q.propositions, k.bonnes, k.reponses_qroc, r.choix, r.texte)), 0),
+         count(q.id)::integer,
+         case when count(q.id) = 0 then 0 else round(20 * coalesce(sum(public.points(q.type, q.propositions, k.bonnes, k.reponses_qroc, r.choix, r.texte)), 0) / count(q.id), 2) end
+  from c join public.questions q on q.serie_id = c.serie
+  join public.corrections k on k.question_id = q.id
+  left join public.reponses r on r.copie_id = c.id and r.question_id = q.id
+$$;
+
+-- Nombre de questions et de dossiers d'une épreuve (visible avant l'ouverture,
+-- sans dévoiler le sujet).
+create or replace function public.infos_qcm(p_seance uuid)
+returns table (questions integer, dossiers integer)
+language sql stable security definer set search_path = public as $$
+  select (select count(*)::integer from public.questions q where q.serie_id = public.serie_de(s)),
+         (select count(*)::integer from public.dossiers d where d.serie_id = public.serie_de(s))
+  from public.seances s where s.id = p_seance and public.peut_voir_seance(s)
+$$;
+
+-- Commencer (ou reprendre) l'épreuve : crée la copie de l'étudiant.
+create or replace function public.commencer_epreuve(p_seance uuid)
+returns uuid language plpgsql security definer set search_path = public as $$
+declare s public.seances; v uuid;
+begin
+  select * into s from public.seances where id = p_seance;
+  if not found or not public.peut_voir_seance(s) or not s.epreuve then raise exception 'Épreuve introuvable'; end if;
+  select id into v from public.copies where seance_id = p_seance and user_id = auth.uid();
+  if v is not null then return v; end if;
+  if not public.epreuve_ouverte(s) then raise exception 'Épreuve fermée'; end if;
+  insert into public.copies (seance_id, user_id) values (p_seance, auth.uid()) returning id into v;
+  return v;
+end;
+$$;
+
+-- Enregistrer une réponse (à chaque coche). p_valider = true verrouille la question.
+create or replace function public.enregistrer_reponse(p_seance uuid, p_question uuid, p_choix text[], p_texte text, p_valider boolean)
+returns void language plpgsql security definer set search_path = public as $$
+declare s public.seances; c public.copies; q public.questions; deja boolean;
+begin
+  select * into s from public.seances where id = p_seance;
+  select * into c from public.copies where seance_id = p_seance and user_id = auth.uid();
+  if c.id is null then raise exception 'Copie introuvable'; end if;
+  if c.rendue_le is not null then raise exception 'Copie déjà rendue'; end if;
+  if not public.epreuve_ouverte(s) then raise exception 'Épreuve fermée'; end if;
+  select * into q from public.questions where id = p_question and serie_id = public.serie_de(s);
+  if q.id is null then raise exception 'Question introuvable'; end if;
+  if exists (select 1 from unnest(coalesce(p_choix, '{}')) x where not exists (
+      select 1 from jsonb_array_elements(q.propositions) p where p->>'id' = x)) then
+    raise exception 'Proposition inconnue';
+  end if;
+  select validee into deja from public.reponses where copie_id = c.id and question_id = q.id;
+  if deja then raise exception 'Question déjà validée'; end if;
+  insert into public.reponses (copie_id, question_id, choix, texte, validee, modifiee_le)
+  values (c.id, q.id, coalesce(p_choix, '{}'), left(coalesce(p_texte, ''), 500), coalesce(p_valider, false), now())
+  on conflict (copie_id, question_id) do update
+    set choix = excluded.choix, texte = excluded.texte, validee = excluded.validee, modifiee_le = now();
+end;
+$$;
+
+create or replace function public.rendre_copie(p_seance uuid)
+returns void language sql security definer set search_path = public as $$
+  update public.copies set rendue_le = now() where seance_id = p_seance and user_id = auth.uid() and rendue_le is null
+$$;
+
+-- Mon résultat, une fois la correction publiée : note, moyenne et rang dans
+-- la série (tous les groupes ayant passé la même épreuve).
+create or replace function public.mon_resultat(p_seance uuid)
+returns table (points numeric, total integer, note20 numeric, moyenne numeric, rang integer, effectif integer)
+language plpgsql stable security definer set search_path = public as $$
+#variable_conflict use_column
+declare s public.seances; ma uuid;
+begin
+  select * into s from public.seances where id = p_seance;
+  if not found or not public.peut_voir_seance(s) or not s.correction_publiee then return; end if;
+  select id into ma from public.copies where seance_id = p_seance and user_id = auth.uid();
+  if ma is null then return; end if;
+  return query
+  with toutes as (
+    select c.id, n.points, n.total, n.note20 from public.copies c
+    join public.seances x on x.id = c.seance_id and public.serie_de(x) = public.serie_de(s)
+    cross join lateral public.note_copie(c.id) n)
+  select t.points, t.total, t.note20,
+         (select round(avg(note20), 2) from toutes),
+         (select count(*)::integer + 1 from toutes o where o.note20 > t.note20),
+         (select count(*)::integer from toutes)
+  from toutes t where t.id = ma;
+end;
+$$;
+
+-- Résultats de toute la série (équipe).
+create or replace function public.resultats_epreuve(p_seance uuid)
+returns table (seance_id uuid, user_id uuid, email text, prenom text, nom text, groupe text,
+               commencee_le timestamptz, rendue_le timestamptz, points numeric, total integer, note20 numeric, rang integer)
+language plpgsql stable security definer set search_path = public as $$
+#variable_conflict use_column
+declare s public.seances;
+begin
+  if not public.est_equipe() then raise exception 'Réservé à l''équipe'; end if;
+  select * into s from public.seances where id = p_seance;
+  return query
+  with t as (
+    select c.seance_id, c.user_id, p.email, p.prenom, p.nom, g.nom as groupe, c.commencee_le, c.rendue_le, n.points, n.total, n.note20
+    from public.copies c
+    join public.seances x on x.id = c.seance_id and public.serie_de(x) = public.serie_de(s)
+    join public.profils p on p.id = c.user_id
+    left join public.groupes g on g.id = p.groupe_id
+    cross join lateral public.note_copie(c.id) n)
+  select t.*, (rank() over (order by t.note20 desc))::integer from t order by t.note20 desc, t.nom;
+end;
+$$;
+
+-- Règles d'accès
+alter table public.dossiers    enable row level security;
+alter table public.questions   enable row level security;
+alter table public.corrections enable row level security;
+alter table public.copies      enable row level security;
+alter table public.reponses    enable row level security;
+
+drop policy if exists dossiers_lecture on public.dossiers;
+create policy dossiers_lecture on public.dossiers for select to authenticated using (public.peut_voir_sujet(serie_id));
+drop policy if exists dossiers_equipe on public.dossiers;
+create policy dossiers_equipe on public.dossiers for all to authenticated using (public.est_equipe()) with check (public.est_equipe());
+
+drop policy if exists questions_lecture on public.questions;
+create policy questions_lecture on public.questions for select to authenticated using (public.peut_voir_sujet(serie_id));
+drop policy if exists questions_equipe on public.questions;
+create policy questions_equipe on public.questions for all to authenticated using (public.est_equipe()) with check (public.est_equipe());
+
+drop policy if exists corrections_lecture on public.corrections;
+create policy corrections_lecture on public.corrections for select to authenticated
+  using (exists (select 1 from public.questions q where q.id = question_id and public.peut_voir_correction(q.serie_id)));
+drop policy if exists corrections_equipe on public.corrections;
+create policy corrections_equipe on public.corrections for all to authenticated using (public.est_equipe()) with check (public.est_equipe());
+
+-- Copies et réponses : lecture de les siennes (ou tout pour l'équipe) ;
+-- écriture uniquement par les fonctions ci-dessus.
+drop policy if exists copies_lecture on public.copies;
+create policy copies_lecture on public.copies for select to authenticated using (user_id = auth.uid() or public.est_equipe());
+drop policy if exists reponses_lecture on public.reponses;
+create policy reponses_lecture on public.reponses for select to authenticated
+  using (exists (select 1 from public.copies c where c.id = copie_id and (c.user_id = auth.uid() or public.est_equipe())));
+
+-- Images des QCM : bucket « documents », dossier qcm/<série>/…
+drop policy if exists qcm_images_lecture on storage.objects;
+create policy qcm_images_lecture on storage.objects for select to authenticated
+  using (bucket_id = 'documents' and (storage.foldername(name))[1] = 'qcm'
+         and public.peut_voir_sujet(((storage.foldername(name))[2])::uuid));

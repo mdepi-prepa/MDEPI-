@@ -62,7 +62,8 @@ export async function vueAdminSeance(app, { id, copie, epreuve }) {
   let s;
   if (copie) {
     const source = await app.api.seance(copie);
-    s = source && { ...VIDE, ...source, id: undefined, annulee: false, modifiee_le: null, replay_url: '', replay_duree_min: null };
+    // Une épreuve dupliquée garde le même QCM et le même classement (même série).
+    s = source && { ...VIDE, ...source, id: undefined, serie: source.serie || source.id, annulee: false, modifiee_le: null, replay_url: '', replay_duree_min: null };
   } else s = nouvelle ? { ...VIDE, epreuve: !!epreuve } : await app.api.seance(id);
   if (!s) return { html: html`<div class="page">${enteteAdmin('Séance introuvable', '#/admin/seances')}</div>` };
   const retour = s.epreuve ? '#/admin/epreuves' : '#/admin/seances';
@@ -74,7 +75,11 @@ export async function vueAdminSeance(app, { id, copie, epreuve }) {
 
   const vue = html`<div class="page">
     ${enteteAdmin(copie ? (s.epreuve ? "Dupliquer l'épreuve" : 'Dupliquer la séance') : nouvelle ? (s.epreuve ? 'Nouvelle épreuve' : 'Nouvelle séance') : `Modifier la ${nom}`, retour)}
-    ${copie ? html`<p class="aide">Copie de « ${s.titre} ». Changez la date et le groupe, puis enregistrez.</p>` : ''}
+    ${copie ? html`<p class="aide">Copie de « ${s.titre} ». Changez la date et le groupe, puis enregistrez.${s.epreuve ? ' Le QCM et le classement sont partagés avec l’épreuve d’origine.' : ''}</p>` : ''}
+    ${s.epreuve && !nouvelle && !copie
+      ? html`<div class="carte ligne-info"><span class="pile-mini"><strong>QCM de l'épreuve</strong><span class="aide">Import Théia, aperçu corrigé, résultats, notes et sauvegarde des copies.</span></span>
+          <a class="btn plein" href="#/admin/epreuves/${s.id}/qcm">Ouvrir</a></div>`
+      : ''}
     <form class="carte pile" id="f-seance">
       <label class="champ"><span>Titre</span><input name="titre" required value="${s.titre}" placeholder="${s.epreuve ? 'CCB n°3 · examen blanc' : 'Cardiologie : syndromes coronariens aigus'}"></label>
       <label class="champ"><span>Matière</span><input name="matiere" value="${s.matiere}" placeholder="Cardiologie"></label>
@@ -169,6 +174,7 @@ export async function vueAdminSeance(app, { id, copie, epreuve }) {
         replay_url: String(d.get('replay_url')).trim() || null,
         replay_duree_min: d.get('replay_duree_min') ? Number(d.get('replay_duree_min')) : null,
       };
+      if (copie && donnees.epreuve) Object.assign(donnees, { serie: s.serie, correction_publiee: !!s.correction_publiee });
       // Changement de salle, d'horaire ou annulation : signalé aux étudiants.
       if (!nouvelle) {
         const change =

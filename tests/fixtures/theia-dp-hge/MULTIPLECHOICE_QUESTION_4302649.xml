@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<assessmentItem xmlns="http://www.imsglobal.org/xsd/imsqti_v2p1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" identifier="MULTIPLECHOICE_QUESTION_4302649" title="Question à réponses multiples" timeDependent="false" adaptive="false" toolName="Theia" xsi:schemaLocation="http://www.imsglobal.org/xsd/imsqti_v2p1 http://www.imsglobal.org/xsd/qti/qtiv2p1/imsqti_v2p1.xsd">
+  <responseDeclaration identifier="RESPONSE" cardinality="multiple" baseType="identifier">
+    <correctResponse>
+      <value>CHOICE_9018011</value>
+      <value>CHOICE_9018013</value>
+      <value>CHOICE_9018014</value>
+    </correctResponse>
+  </responseDeclaration>
+  <outcomeDeclaration identifier="SCORE" cardinality="single" baseType="integer">
+    <defaultValue>
+      <value>0</value>
+    </defaultValue>
+  </outcomeDeclaration>
+  <itemBody>
+    <choiceInteraction responseIdentifier="MULTIPLECHOICE_QUESTION_4302649" maxChoices="5">
+      <prompt>
+        <div>&lt;p&gt;&lt;strong&gt; &lt;/strong&gt;&lt;span style="font-size:20pt;font-family:Calibri;color:#000000;"&gt;Q3 :&lt;/span&gt;&lt;span style="font-size:20pt;font-family:Calibri;color:#000000;"&gt; Un scanner abdomino-pelvien injecté est réalisé.&lt;br /&gt;Il retrouve une &lt;/span&gt;&lt;span style="font-size:20pt;font-family:Calibri;color:#000000;"&gt;dilatation de la voie biliaire principale à 13 mm et des voies biliaires intrahépatiques, malgré la présence de la prothèse&lt;/span&gt;&lt;span style="font-size:20pt;font-family:Calibri;color:#000000;"&gt;. Il n'existe pas de collection hépatique individualisée.&lt;br /&gt;L'ensemble est évocateur d'une &lt;/span&gt;&lt;span style="font-size:20pt;font-family:Calibri;color:#000000;"&gt;obstruction de la prothèse biliaire&lt;/span&gt;&lt;span style="font-size:20pt;font-family:Calibri;color:#000000;"&gt;, responsable d'une angiocholite aiguë.&lt;br /&gt;Quelles mesures doivent être mises en œuvre immédiatement ?&lt;/span&gt;&lt;/p&gt;</div>
+      </prompt>
+      <simpleChoice identifier="CHOICE_9018011">
+        <div>&lt;div style="margin-top:5.76pt;margin-bottom:0pt;text-align:left;"&gt;&lt;span style="font-size:24pt;"&gt;&lt;span style="font-family:Arial;"&gt;•&lt;/span&gt;&lt;/span&gt;&lt;span style="font-size:24pt;font-family:Calibri;color:#000000;"&gt;A. Réalisation d'hémocultures avant l'antibiothérapie si cela ne retarde pas son administration.&lt;/span&gt;&lt;/div&gt;</div>
+      </simpleChoice>
+      <simpleChoice identifier="CHOICE_9018012">
+        <div>&lt;div style="margin-top:5.76pt;margin-bottom:0pt;text-align:left;"&gt;&lt;span style="font-size:24pt;"&gt;&lt;span style="font-family:Arial;"&gt;•&lt;/span&gt;&lt;/span&gt;&lt;span style="font-size:24pt;font-family:Calibri;color:#000000;"&gt;B. Attendre les résultats des hémocultures avant de débuter le traitement antibiotique.&lt;/span&gt;&lt;/div&gt;</div>
+      </simpleChoice>
+      <simpleChoice identifier="CHOICE_9018013">
+        <div>&lt;div style="margin-top:5.76pt;margin-bottom:0pt;text-align:left;"&gt;&lt;span style="font-size:24pt;"&gt;&lt;span style="font-family:Arial;"&gt;•&lt;/span&gt;&lt;/span&gt;&lt;span style="font-size:24pt;font-family:Calibri;color:#000000;"&gt;C. Introduction rapide d'une antibiothérapie probabiliste intraveineuse adaptée aux infections biliaires.&lt;/span&gt;&lt;/div&gt;</div>
+      </simpleChoice>
+      <simpleChoice identifier="CHOICE_9018014">
+        <div>&lt;div style="margin-top:5.76pt;margin-bottom:0pt;text-align:left;"&gt;&lt;span style="font-size:24pt;"&gt;&lt;span style="font-family:Arial;"&gt;•&lt;/span&gt;&lt;/span&gt;&lt;span style="font-size:24pt;font-family:Calibri;color:#000000;"&gt;D. Hydratation intraveineuse adaptée avec surveillance hémodynamique et biologique rapprochée.&lt;/span&gt;&lt;/div&gt;</div>
+      </simpleChoice>
+      <simpleChoice identifier="CHOICE_9018015">
+        <div>&lt;div style="margin-top:5.76pt;margin-bottom:0pt;text-align:left;"&gt;&lt;span style="font-size:24pt;"&gt;&lt;span style="font-family:Arial;"&gt;•&lt;/span&gt;&lt;/span&gt;&lt;span style="font-size:24pt;font-family:Calibri;color:#FF0000;"&gt;E. Réalisation d'une cholécystectomie en urgence comme premier geste thérapeutique.&lt;/span&gt;&lt;/div&gt;</div>
+      </simpleChoice>
+    </choiceInteraction>
+  </itemBody>
+</assessmentItem>

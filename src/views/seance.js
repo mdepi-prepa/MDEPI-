@@ -1,14 +1,20 @@
 // Détail d'une séance : infos, Zoom, agenda, replay, supports.
 import { html, urlSure } from '../lib/html.js';
 import { icones } from '../lib/icones.js';
-import { dateLongue, plageHoraire, compteARebours, duree } from '../lib/dates.js';
+import { dateLongue, heure, plageHoraire, compteARebours, duree } from '../lib/dates.js';
 import { telechargerIcs } from '../lib/ics.js';
 import { enTete, etiquettes, boutonZoom } from './commun.js';
+import { estEquipe } from '../lib/acces.js';
 
 export async function vueSeance(app, { id }) {
   const s = await app.api.seance(id);
   if (!s) return { html: html`<div class="page">${enTete('Séance introuvable', null, '#/planning')}<p>Cette séance n'existe pas ou ne concerne pas votre promo.</p></div>` };
   const docs = await app.api.documents(id);
+  const equipe = estEquipe(app.profil);
+  const [infos, copie] = s.epreuve
+    ? await Promise.all([app.api.infosQcm(id).catch(() => null), equipe ? null : app.api.maCopie(id).catch(() => null)])
+    : [null, null];
+  const enLigne = infos?.questions > 0;
   const passee = new Date(s.fin) <= new Date();
   const supports = docs.filter((d) => d.type === 'support');
   const corrections = docs.filter((d) => d.type === 'correction');
@@ -39,8 +45,9 @@ export async function vueSeance(app, { id }) {
         ? html`<a class="btn plein" href="${urlSure(s.replay_url)}" target="_blank" rel="noopener">${icones.lecture(16)} Regarder le replay${s.replay_duree_min ? ` (${duree(s.replay_duree_min)})` : ''}</a>`
         : ''}
       ${passee && !s.replay_url && !s.annulee && !s.epreuve ? html`<p class="aide">Le replay sera ajouté ici dès qu'il sera disponible.</p>` : ''}
-      ${passee && s.epreuve && !docs.length ? html`<p class="aide">Le sujet et la correction seront ajoutés ici après l'épreuve.</p>` : ''}
+      ${passee && s.epreuve && !docs.length && !enLigne ? html`<p class="aide">Le sujet et la correction seront ajoutés ici après l'épreuve.</p>` : ''}
     </section>
+    ${enLigne && !s.annulee ? blocEpreuve(s, infos, copie, equipe) : ''}
     ${listeDocs('Sujet', sujets)}
     ${listeDocs('Supports', supports)}
     ${listeDocs(s.epreuve ? 'Correction' : 'Diapos de correction', corrections)}
@@ -66,4 +73,25 @@ export async function vueSeance(app, { id }) {
   }
 
   return { html: vue, monter, titre: s.titre };
+}
+
+// Épreuve passée dans l'app (QCM importé de Théia).
+function blocEpreuve(s, infos, copie, equipe) {
+  const maintenant = new Date();
+  const ouverte = new Date(s.debut) <= maintenant && maintenant < new Date(s.fin);
+  const avant = maintenant < new Date(s.debut);
+  let contenu;
+  if (equipe) contenu = html`<a class="btn plein" href="#/admin/epreuves/${s.id}/qcm">QCM et résultats</a>`;
+  else if (copie?.rendue_le) {
+    contenu = s.correction_publiee
+      ? html`<p class="alerte vert">Copie envoyée. La correction est publiée.</p><a class="btn plein" href="#/epreuve/${s.id}">Voir ma note et ma correction</a>`
+      : html`<p class="alerte vert">Copie envoyée. Votre note apparaîtra ici à la publication de la correction.</p>`;
+  } else if (ouverte) contenu = html`<a class="btn plein grand" href="#/epreuve/${s.id}">${copie ? "Reprendre l'épreuve" : "Passer l'épreuve"}</a>`;
+  else if (avant) contenu = html`<p class="aide">L'épreuve s'ouvrira ici le ${dateLongue(s.debut).toLowerCase()} à ${heure(s.debut)}.</p>`;
+  else contenu = copie ? html`<a class="btn contour" href="#/epreuve/${s.id}">Voir ma copie</a>` : html`<p class="aide">Vous n'avez pas passé cette épreuve dans l'app.</p>`;
+  return html`<section class="carte pile carte-qcm">
+    <h2 class="titre-section">Épreuve en ligne</h2>
+    <p>${infos.questions} question${infos.questions > 1 ? 's' : ''} en ${infos.dossiers} dossier${infos.dossiers > 1 ? 's' : ''} (DP, KFP), à cocher dans l'app.</p>
+    ${contenu}
+  </section>`;
 }
