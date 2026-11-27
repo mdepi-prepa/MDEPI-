@@ -533,6 +533,17 @@ export function creerBackendDemo() {
       Object.assign(db.inscrits.find((x) => x.email === email), champs);
       sauver();
     },
+    async supprimerCompte(email) {
+      exiger(estAdmin);
+      if (email === db.session) throw new Error('Vous ne pouvez pas supprimer votre propre compte');
+      const copies = db.copies.filter((c) => c.user_id === email).length;
+      db.inscrits = db.inscrits.filter((i) => i.email !== email);
+      db.copies = db.copies.filter((c) => c.user_id !== email);
+      db.entrainements = db.entrainements.filter((e) => e.user_id !== email);
+      delete db.lues[email];
+      sauver();
+      return copies;
+    },
     async passageAnnee() {
       exiger(estAdmin);
       let n = 0;

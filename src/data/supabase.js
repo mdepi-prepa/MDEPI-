@@ -232,6 +232,9 @@ export function creerBackendSupabase(url, cleAnon) {
     async modifierInscrit(email, champs) {
       verifier(await sb.from('inscrits').update(champs).eq('email', email));
     },
+    async supprimerCompte(email) {
+      return verifier(await sb.rpc('supprimer_compte', { p_email: email }));
+    },
     async passageAnnee() {
       return verifier(await sb.rpc('passage_annee'));
     },

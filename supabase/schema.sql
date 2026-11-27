@@ -197,6 +197,34 @@ begin
 end;
 $$;
 
+-- Suppression définitive d'un compte (admin seulement, jamais le sien) :
+-- retire l'adresse des inscrits et l'utilisateur de Supabase Auth. Par
+-- cascade, son profil, ses copies, ses réponses, ses entraînements et ses
+-- annonces lues sont effacés ; les classements sont recalculés sans lui.
+-- Renvoie le nombre de copies effacées.
+create or replace function public.supprimer_compte(p_email text)
+returns integer
+language plpgsql security definer set search_path = public
+as $$
+declare
+  e text := lower(trim(p_email));
+  n integer;
+begin
+  if not public.est_admin() then
+    raise exception 'Réservé aux administrateurs';
+  end if;
+  if e = (select email from public.profils where id = auth.uid()) then
+    raise exception 'Vous ne pouvez pas supprimer votre propre compte';
+  end if;
+  select count(*) into n from public.copies c join auth.users u on u.id = c.user_id where lower(u.email) = e;
+  delete from auth.users where lower(email) = e;
+  delete from public.inscrits where email = e;
+  return n;
+end;
+$$;
+revoke all on function public.supprimer_compte(text) from public, anon;
+grant execute on function public.supprimer_compte(text) to authenticated;
+
 -- ---------------------------------------------------------------------
 -- 4. Règles d'accès (Row Level Security)
 -- ---------------------------------------------------------------------

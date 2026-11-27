@@ -101,6 +101,7 @@ GitHub Pages n'est pas conseillé ici : pour un dépôt privé, il demande un ab
 |---|---|
 | Ajouter les inscrits | Back-office › Comptes › Importer (CSV avec l'en-tête `email;prenom;nom;promo;groupe`, colonne `role` facultative) |
 | Créer un compte à la main (étudiant, conférencier, admin) | Back-office › Comptes › Ajouter un compte ; le rôle et l'accès se changent ensuite dans la liste |
+| Supprimer un compte | Back-office › Comptes, bouton « Supprimer » sur la ligne : efface définitivement le compte (connexion comprise), ses copies, notes et entraînements ; les classements sont recalculés. Pour garder ses résultats, décochez plutôt « Actif ». On ne peut pas supprimer son propre compte. |
 | Changer un étudiant de promo ou de groupe, le désactiver | Back-office › Comptes, directement dans le tableau |
 | Créer les groupes de rotation | Back-office › Comptes › Groupes (ou automatiquement à l'import) |
 | Passage à l'année suivante | Back-office › Comptes, en bas (D4 désactivés, D1→D2, D2→D3, D3→D4) |

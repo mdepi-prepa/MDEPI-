@@ -76,7 +76,7 @@ export async function vueAdminComptes(app) {
       </div>
       ${liste.length
         ? html`<div class="tableau-defile"><table class="tableau">
-            <thead><tr><th>Nom</th><th>E-mail</th><th>Rôle</th><th>Promo</th><th>Groupe</th><th>Actif</th></tr></thead>
+            <thead><tr><th>Nom</th><th>E-mail</th><th>Rôle</th><th>Promo</th><th>Groupe</th><th>Actif</th><th><span class="sr">Supprimer</span></th></tr></thead>
             <tbody>${liste.map(
               (i) => {
               // Pas de retrait de ses propres droits : on ne peut pas s'enfermer dehors.
@@ -90,11 +90,12 @@ export async function vueAdminComptes(app) {
                   .filter((g) => g.promo === i.promo)
                   .map((g) => html`<option value="${g.id}" ${i.groupe_id === g.id ? 'selected' : ''}>${g.nom}</option>`)}</select></td>
                 <td><input type="checkbox" data-champ="actif" ${i.actif ? 'checked' : ''} ${moi ? 'disabled' : ''} aria-label="Compte actif"></td>
+                <td>${moi ? '' : html`<button class="btn lien rouge" data-supprimer="${i.email}" aria-label="Supprimer ${i.prenom} ${i.nom}">Supprimer</button>`}</td>
               </tr>`;
             }
             )}</tbody></table></div>`
         : vide('Aucun inscrit.')}
-      <p class="aide">Changer le rôle ou décocher « Actif » s'applique immédiatement (décocher coupe l'accès sans rien effacer). Changer la promo ou le groupe change ce que l'étudiant voit.</p>
+      <p class="aide">Changer le rôle ou décocher « Actif » s'applique immédiatement : décocher coupe l'accès en gardant les résultats. « Supprimer » efface le compte et ses copies, définitivement. Changer la promo ou le groupe change ce que l'étudiant voit.</p>
     </section>
 
     <section class="carte pile zone-danger">
@@ -194,6 +195,24 @@ export async function vueAdminComptes(app) {
           app.message(`${n} étudiant(s) passé(s) à l'année suivante.`);
           app.rafraichir();
         }
+      }
+      const aSupprimer = e.target.closest('[data-supprimer]')?.dataset.supprimer;
+      if (aSupprimer) {
+        const i = inscrits.find((x) => x.email === aSupprimer);
+        const ok = confirm(
+          `Supprimer définitivement le compte de ${i.prenom} ${i.nom} (${i.email}) ?\n\n` +
+            'Ses copies, notes et entraînements seront effacés, et les classements recalculés sans lui. Cette action est irréversible.\n\n' +
+            'Pour seulement couper son accès en gardant ses résultats, annulez et décochez « Actif ».'
+        );
+        if (!ok) return;
+        try {
+          const n = await app.api.supprimerCompte(aSupprimer);
+          app.message(`Compte supprimé${n ? ` (${n} copie${n > 1 ? 's' : ''} effacée${n > 1 ? 's' : ''})` : ''}.`);
+          app.rafraichir();
+        } catch (err) {
+          app.message(err.message, 'erreur');
+        }
+        return;
       }
       const idGroupe = e.target.closest('[data-suppr-groupe]')?.dataset.supprGroupe;
       if (idGroupe && confirm('Supprimer ce groupe ? Ses membres resteront dans la promo, sans groupe.')) {

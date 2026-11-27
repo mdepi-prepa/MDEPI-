@@ -397,6 +397,18 @@ describe('comptes', () => {
     expect((await db.query('select role from profils where id = $1', [nouveau])).rows[0].role).toBe('enseignant');
     await en(ids.admin, `delete from inscrits where email = 'nouvel.admin@ex.fr'`);
   });
+  it('supprimer un compte efface l’utilisateur, ses copies et son inscription (admin seulement, pas soi-même)', async () => {
+    await db.query(`insert into inscrits (email, prenom, role, promo) values ('parti@ex.fr', 'Parti', 'etudiant', 'D2')`);
+    const uid = await inscrire('parti@ex.fr');
+    await db.query('insert into copies (seance_id, user_id) values ($1, $2)', [ids.seanceD3, uid]);
+    await expect(en(ids.prof, `select supprimer_compte('parti@ex.fr')`)).rejects.toThrow(/administrateurs/);
+    await expect(en(ids.admin, `select supprimer_compte('admin@ex.fr')`)).rejects.toThrow(/propre compte/);
+    const [{ supprimer_compte: n }] = await en(ids.admin, `select supprimer_compte(' Parti@ex.fr ')`);
+    expect(n).toBe(1);
+    for (const t of ['auth.users where id = $1', 'profils where id = $1', 'copies where user_id = $1'])
+      expect((await db.query(`select 1 from ${t}`, [uid])).rows).toEqual([]);
+    expect((await db.query(`select 1 from inscrits where email = 'parti@ex.fr'`)).rows).toEqual([]);
+  });
   it('désactiver un inscrit coupe son accès', async () => {
     await en(ids.admin, `update inscrits set actif = false where email = 'leo@ex.fr'`);
     expect(await en(ids.leo, 'select titre from seances')).toEqual([]);
