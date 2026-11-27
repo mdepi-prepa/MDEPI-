@@ -22,6 +22,44 @@ const lireOnglet = () => {
   }
 };
 
+// Scores d'entraînement pas encore envoyés (perte de connexion à la fin) :
+// gardés sur l'appareil et renvoyés dès que possible.
+const CLE_ATTENTE = 'mdepi-entrainements-attente';
+const lireJson = (cle, defaut) => {
+  try {
+    return JSON.parse(localStorage.getItem(cle)) ?? defaut;
+  } catch {
+    return defaut;
+  }
+};
+const ecrireJson = (cle, valeur) => {
+  try {
+    if (valeur == null) localStorage.removeItem(cle);
+    else localStorage.setItem(cle, JSON.stringify(valeur));
+  } catch {
+    /* stockage indisponible */
+  }
+};
+let envoiAttente = null;
+let ecouteReseau = false;
+function envoyerScoresEnAttente(app) {
+  if (envoiAttente) return envoiAttente;
+  envoiAttente = (async () => {
+    let liste = lireJson(CLE_ATTENTE, []);
+    while (liste.length) {
+      const [t] = liste;
+      try {
+        await app.api.enregistrerEntrainement(t.seance, t.reponses, t.points, t.total);
+      } catch (err) {
+        if (/connexion|fetch|network/i.test(err.message)) break;
+      }
+      liste = lireJson(CLE_ATTENTE, []).filter((x) => x.le !== t.le);
+      ecrireJson(CLE_ATTENTE, liste.length ? liste : null);
+    }
+  })().finally(() => (envoiAttente = null));
+  return envoiAttente;
+}
+
 export async function vueEntrainement(app) {
   const [seances, tentatives] = await Promise.all([app.api.seances(), app.api.mesEntrainements().catch(() => [])]);
   const maintenant = new Date();
@@ -75,6 +113,7 @@ export async function vueEntrainement(app) {
   </div>`;
 
   function monter(el) {
+    envoyerScoresEnAttente(app);
     const select = el.querySelector('[data-matiere]');
     let onglet = lireOnglet();
     if (!CATEGORIES[onglet]) onglet = 'conference';
@@ -145,10 +184,21 @@ export async function vueRejouer(app, { id }) {
   </div>`;
 
   function monter(el) {
+    envoyerScoresEnAttente(app);
+    if (!ecouteReseau) {
+      ecouteReseau = true;
+      window.addEventListener('online', () => envoyerScoresEnAttente(app));
+    }
     const zone = el.querySelector('[data-zone]');
     let questions = [];
     let i = 0;
     let reponses = {};
+    // Tentative en cours gardée sur l'appareil à chaque réponse : on peut la
+    // reprendre après une coupure, une fermeture de l'app ou un rechargement.
+    const cleTentative = `mdepi-entrainement-${s.id}-${app.profil?.id || ''}`;
+    const sauver = () => questions.length && ecrireJson(cleTentative, { ids: questions.map((q) => q.id), reponses, i, courant, le: Date.now() });
+    const enCours = lireJson(cleTentative, null);
+    const reprise = enCours?.ids?.length && enCours.ids.every((id) => toutes.some((q) => q.id === id)) ? enCours : null;
     let verifiee = false;
     let confirmerVide = false;
     // Conférences : même écran que l'épreuve (sommaire des questions,
@@ -168,7 +218,7 @@ export async function vueRejouer(app, { id }) {
     };
     window.addEventListener('hashchange', quitterPassage, { once: true });
 
-    const demarrerPassage = () => {
+    const demarrerPassage = (depuis = 0) => {
       document.body.classList.add('mode-epreuve');
       
       courant = 0;
@@ -185,7 +235,9 @@ export async function vueRejouer(app, { id }) {
         <div class="resume" data-resume hidden></div>
       </div>`);
       allerA(0);
-      window.scrollTo(0, 0);
+      // Reprise : on revient sur la question où l'on s'était arrêté.
+      while (depuis > courant && accessible(courant + 1)) allerA(courant + 1);
+      if (!depuis) window.scrollTo(0, 0);
     };
 
     const dessinerNavE = () => {
@@ -288,6 +340,7 @@ export async function vueRejouer(app, { id }) {
         return;
       }
       reponses[q.id] = { ...repE(q), validee: true };
+      sauver();
       const suivante = questions.findIndex((x, k) => k > courant && !repE(x).validee && accessible(k));
       if (suivante >= 0) allerA(suivante);
       else {
@@ -324,8 +377,12 @@ export async function vueRejouer(app, { id }) {
           ${examen
             ? "Même écran que l'épreuve, sans limite de temps : chaque question validée avant de passer à la suite, correction complète à la fin."
             : 'Correction après chaque question, sans limite de temps.'}</p>
+        ${reprise
+          ? html`<p class="alerte">Tentative en cours gardée sur cet appareil : ${Object.keys(reprise.reponses || {}).length} question${Object.keys(reprise.reponses || {}).length > 1 ? 's' : ''} répondue${Object.keys(reprise.reponses || {}).length > 1 ? 's' : ''} sur ${reprise.ids.length}.</p>`
+          : ''}
         <div class="actions">
-          <button class="btn plein" data-depart="tout">Rejouer toute l'épreuve</button>
+          ${reprise ? html`<button class="btn plein" data-depart="reprendre">Reprendre où j'en étais</button>` : ''}
+          <button class="btn ${reprise ? 'contour' : 'plein'}" data-depart="tout">Rejouer toute l'épreuve</button>
           ${ratees.length ? html`<button class="btn contour" data-depart="ratees">Refaire mes ${ratees.length} question${ratees.length > 1 ? 's' : ''} ratée${ratees.length > 1 ? 's' : ''}</button>` : ''}
         </div>
         ${ratees.length ? html`<p class="aide">Questions ratées d'après ${derniere ? 'votre dernière tentative' : 'votre copie de l’épreuve'}.</p>` : ''}
@@ -397,10 +454,15 @@ export async function vueRejouer(app, { id }) {
         if (d) d.questions.push(q);
         else dossiers.push({ ref: q.dossier, titre: q.dossier.titre, questions: [q] });
       }
+      ecrireJson(cleTentative, null);
+      const score = { seance: s.id, reponses, points: Math.round(pts * 100) / 100, total, le: Date.now() };
       try {
-        await app.api.enregistrerEntrainement(s.id, reponses, Math.round(pts * 100) / 100, total);
+        await app.api.enregistrerEntrainement(score.seance, score.reponses, score.points, score.total);
       } catch (err) {
-        app.message("Score non enregistré : " + err.message, 'erreur');
+        if (/connexion|fetch|network/i.test(err.message) || !navigator.onLine) {
+          ecrireJson(CLE_ATTENTE, [...lireJson(CLE_ATTENTE, []), score]);
+          app.message("Pas de connexion : votre score est gardé sur cet appareil et sera enregistré dès le retour du réseau.");
+        } else app.message('Score non enregistré : ' + err.message, 'erreur');
       }
       zone.innerHTML = String(html`<section class="carte pile">
         <h2 class="titre-seance">Score</h2>
@@ -430,6 +492,13 @@ export async function vueRejouer(app, { id }) {
       window.scrollTo(0, 0);
     };
 
+    // Chaque case cochée ou réponse tapée est gardée sur l'appareil.
+    el.addEventListener('change', () => {
+      if (!questions.length) return;
+      if (examen) lireE();
+      else if (!verifiee) lire();
+      sauver();
+    });
     // QRP : pas plus de n cases.
     el.addEventListener('change', (e) => {
       const q = examen ? questions[courant] : questions[i];
@@ -443,21 +512,30 @@ export async function vueRejouer(app, { id }) {
       const b = e.target.closest('[data-depart],[data-action],[data-aller]');
       if (!b) return;
       if (b.dataset.depart) {
-        questions = b.dataset.depart === 'ratees' ? ratees : toutes;
-        i = 0;
-        reponses = {};
-        if (examen) demarrerPassage();
+        if (b.dataset.depart === 'reprendre' && reprise) {
+          questions = reprise.ids.map((id) => toutes.find((q) => q.id === id));
+          reponses = reprise.reponses || {};
+          i = Math.min(reprise.i || 0, questions.length - 1);
+        } else {
+          questions = b.dataset.depart === 'ratees' ? ratees : toutes;
+          i = 0;
+          reponses = {};
+        }
+        if (examen) demarrerPassage(b.dataset.depart === 'reprendre' ? reprise.courant || 0 : 0);
         else dessiner();
+        sauver();
       } else if (b.dataset.aller !== undefined) {
         if (b.disabled) return;
         lireE();
         allerA(Number(b.dataset.aller));
+        sauver();
       } else if (b.dataset.action === 'valider') validerE();
       else if (b.dataset.action === 'resume') montrerResumeE();
       else if (b.dataset.action === 'retour') zone.querySelector('[data-resume]').hidden = true;
       else if (b.dataset.action === 'envoyer') fin();
       else if (b.dataset.action === 'verifier' && !verifiee) verifier();
       else if (b.dataset.action === 'suivante') {
+        sauver();
         if (++i < questions.length) dessiner();
         else fin();
       }
