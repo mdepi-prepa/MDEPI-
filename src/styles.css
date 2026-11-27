@@ -255,6 +255,12 @@ button.segment { border: none; background: transparent; font: inherit; font-size
 .ligne-corps { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .ligne-titre { font-size: 14px; font-weight: 600; line-height: 1.25; }
 .ligne-meta { font-size: 12px; color: var(--encre-2); }
+/* Séances passées : replay Zoom et support en avant */
+.carte-passee { display: flex; flex-direction: column; gap: 12px; }
+.carte-passee .ligne-titre { font-size: 15px; }
+.actions-passee { display: flex; flex-wrap: wrap; gap: 8px; }
+.actions-passee .btn { flex: 1 1 140px; min-height: 44px; font-size: 14px; white-space: nowrap; padding: 0 12px; }
+.actions-passee .btn.inactif { font-weight: 500; }
 .btn-lecture { width: 48px; height: 48px; border-radius: 12px; background: var(--encre); color: #fff; display: flex; align-items: center; justify-content: center; flex: none; transition: background var(--transition); }
 @media (hover: hover) { .btn-lecture:hover { background: var(--accent); } }
 
