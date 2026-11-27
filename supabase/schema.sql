@@ -356,11 +356,21 @@ returns boolean language sql stable security definer set search_path = public as
     where public.serie_de(s) = p_serie and public.peut_voir_seance(s) and now() >= s.debut)
 $$;
 
+-- Série terminée : tous les groupes (séances non annulées) ont fini l'épreuve.
+create or replace function public.serie_terminee(p_serie uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select not exists (select 1 from public.seances s where public.serie_de(s) = p_serie and not s.annulee and s.fin > now())
+$$;
+
+-- Correction détaillée (bonnes réponses) : visible quand tous les groupes ont
+-- passé l'épreuve, ou plus tôt si l'équipe la publie. Elle ne doit pas fuiter
+-- vers un groupe qui n'a pas encore composé.
 create or replace function public.peut_voir_correction(p_serie uuid)
 returns boolean language sql stable security definer set search_path = public as $$
   select public.est_equipe() or exists (
     select 1 from public.seances s
-    where public.serie_de(s) = p_serie and public.peut_voir_seance(s) and s.correction_publiee)
+    where public.serie_de(s) = p_serie and public.peut_voir_seance(s)
+      and (s.correction_publiee or (now() >= s.debut and public.serie_terminee(p_serie))))
 $$;
 
 -- Barème MDEPi (type EDN). QRM : 0 discordance = 1, 1 = 0,5, 2 = 0,2, 3+ = 0.
@@ -489,10 +499,12 @@ $$;
 -- Nombre de questions et de dossiers d'une épreuve (visible avant l'ouverture,
 -- sans dévoiler le sujet).
 create or replace function public.infos_qcm(p_seance uuid)
-returns table (questions integer, dossiers integer)
+returns table (questions integer, dossiers integer, correction_visible boolean, groupes_restants integer)
 language sql stable security definer set search_path = public as $$
   select (select count(*)::integer from public.questions q where q.serie_id = public.serie_de(s)),
-         (select count(*)::integer from public.dossiers d where d.serie_id = public.serie_de(s))
+         (select count(*)::integer from public.dossiers d where d.serie_id = public.serie_de(s)),
+         public.peut_voir_correction(public.serie_de(s)),
+         (select count(*)::integer from public.seances x where public.serie_de(x) = public.serie_de(s) and not x.annulee and x.fin > now())
   from public.seances s where s.id = p_seance and public.peut_voir_seance(s)
 $$;
 
@@ -541,27 +553,29 @@ returns void language sql security definer set search_path = public as $$
   update public.copies set rendue_le = now() where seance_id = p_seance and user_id = auth.uid() and rendue_le is null
 $$;
 
--- Mon résultat, une fois la correction publiée : note, moyenne et rang dans
--- la série (tous les groupes ayant passé la même épreuve).
+-- Mon résultat, dès la fin de mon épreuve : note, moyenne et rang parmi les
+-- copies des groupes qui ont déjà fini. Quand un autre groupe passe l'épreuve,
+-- ses copies s'ajoutent au classement (les premiers résultats restent).
 create or replace function public.mon_resultat(p_seance uuid)
-returns table (points numeric, total integer, note20 numeric, moyenne numeric, rang integer, effectif integer)
+returns table (points numeric, total integer, note20 numeric, moyenne numeric, rang integer, effectif integer, groupes_restants integer)
 language plpgsql stable security definer set search_path = public as $$
 #variable_conflict use_column
 declare s public.seances; ma uuid;
 begin
   select * into s from public.seances where id = p_seance;
-  if not found or not public.peut_voir_seance(s) or not s.correction_publiee then return; end if;
+  if not found or not public.peut_voir_seance(s) or now() < s.fin then return; end if;
   select id into ma from public.copies where seance_id = p_seance and user_id = auth.uid();
   if ma is null then return; end if;
   return query
   with toutes as (
     select c.id, n.points, n.total, n.note20 from public.copies c
-    join public.seances x on x.id = c.seance_id and public.serie_de(x) = public.serie_de(s)
+    join public.seances x on x.id = c.seance_id and public.serie_de(x) = public.serie_de(s) and x.fin <= now()
     cross join lateral public.note_copie(c.id) n)
   select t.points, t.total, t.note20,
          (select round(avg(note20), 2) from toutes),
          (select count(*)::integer + 1 from toutes o where o.note20 > t.note20),
-         (select count(*)::integer from toutes)
+         (select count(*)::integer from toutes),
+         (select count(*)::integer from public.seances x where public.serie_de(x) = public.serie_de(s) and not x.annulee and x.fin > now())
   from toutes t where t.id = ma;
 end;
 $$;
@@ -618,6 +632,24 @@ create policy copies_lecture on public.copies for select to authenticated using 
 drop policy if exists reponses_lecture on public.reponses;
 create policy reponses_lecture on public.reponses for select to authenticated
   using (exists (select 1 from public.copies c where c.id = copie_id and (c.user_id = auth.uid() or public.est_equipe())));
+
+-- Entraînement : une épreuve terminée peut être rejouée (sans compter dans le
+-- classement). Chaque tentative est gardée pour l'onglet Progrès.
+create table if not exists public.entrainements (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  serie_id uuid not null references public.seances(id) on delete cascade,
+  reponses jsonb not null default '{}',
+  points numeric not null default 0,
+  total integer not null default 0,
+  fait_le timestamptz not null default now()
+);
+alter table public.entrainements enable row level security;
+drop policy if exists entrainements_lecture on public.entrainements;
+create policy entrainements_lecture on public.entrainements for select to authenticated using (user_id = auth.uid() or public.est_equipe());
+drop policy if exists entrainements_ajout on public.entrainements;
+create policy entrainements_ajout on public.entrainements for insert to authenticated
+  with check (user_id = auth.uid() and public.peut_voir_correction(serie_id));
 
 -- Images des QCM : bucket « documents », dossier qcm/<série>/…
 drop policy if exists qcm_images_lecture on storage.objects;

@@ -54,6 +54,7 @@ describe('import du vrai export Théia', async () => {
     const h = assainir('<p onclick="x()">ok<script>alert(1)</script><img src="qcm-img:a/b.png" onerror="x()"></p>');
     expect(h).not.toMatch(/script|onclick|onerror/);
     expect(h).toContain('src="qcm-img:a/b.png"');
+    expect(assainir('<span class="c-ok">Vrai</span><span class="x" onclick="y">z</span>')).toBe('<span class="c-ok">Vrai</span><span>z</span>');
   });
 });
 

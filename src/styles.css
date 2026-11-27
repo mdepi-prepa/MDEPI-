@@ -378,3 +378,15 @@ body.mode-epreuve #contenu > .passage { max-width: 1100px; margin: 0 auto; }
 .ligne-ajout { display: flex; gap: 8px; }
 .ligne-ajout input { flex: 1; min-width: 0; }
 .ligne-ajout .btn { flex: none; }
+.ligne-entrainement { display: flex; align-items: center; gap: 12px; justify-content: space-between; }
+.ligne-entrainement .pile-mini { flex: 1; min-width: 0; }
+.progression { height: 6px; background: var(--gris); border-radius: 3px; overflow: hidden; }
+.progression span { display: block; height: 100%; background: var(--accent); }
+.passage-question .q-corr { border: none; }
+.passage-question .q-corr .q-corps { padding: 12px 0 0; }
+.verdict-court { display: none; }
+@media (max-width: 560px) {
+  .table-corr td.verdict, .table-corr th:last-child:not(:nth-child(2)) { display: none; }
+  .verdict-court { display: block; font-size: 12px; font-weight: 700; margin-top: 2px; }
+  .table-corr th { width: 54px; }
+}

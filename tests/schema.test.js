@@ -182,7 +182,7 @@ describe('QCM des épreuves', () => {
   it('le sujet n’est visible que des groupes dont l’épreuve a commencé ; les corrections restent cachées', async () => {
     expect((await en(ids.camille, 'select qti_id from questions order by ordre')).map((r) => r.qti_id)).toEqual(['Q1', 'Q2']);
     expect(await en(ids.leo, 'select * from questions')).toEqual([]);
-    expect(await en(ids.leo, 'select * from infos_qcm($1)', [q.e2])).toEqual([{ questions: 2, dossiers: 1 }]);
+    expect(await en(ids.leo, 'select * from infos_qcm($1)', [q.e2])).toEqual([{ questions: 2, dossiers: 1, correction_visible: false, groupes_restants: 2 }]);
     expect(await en(ids.ines, 'select * from infos_qcm($1)', [q.e2])).toEqual([]);
     expect(await en(ids.camille, 'select * from corrections')).toEqual([]);
     expect(await en(ids.ines, 'select * from questions')).toEqual([]);
@@ -203,19 +203,36 @@ describe('QCM des épreuves', () => {
     await expect(en(ids.camille, `insert into reponses (copie_id, question_id) values ($1, $2)`, [c1, q.q1])).rejects.toThrow(/permission|row-level/);
     expect((await en(ids.camille, 'select choix, validee from reponses order by modifiee_le')).length).toBe(2);
   });
-  it('aucune note avant publication ; ensuite note, moyenne et rang', async () => {
+  it('note et rang dès la fin de son épreuve ; les groupes suivants s’ajoutent au classement', async () => {
     expect(await en(ids.camille, 'select * from mon_resultat($1)', [q.e])).toEqual([]);
     await expect(en(ids.camille, 'select * from resultats_epreuve($1)', [q.e])).rejects.toThrow(/équipe/);
-    await en(ids.prof, `update seances set correction_publiee = true where id = $1 or serie = $1`, [q.e]);
-    const [r] = await en(ids.camille, 'select * from mon_resultat($1)', [q.e]);
+    // Fin de l'épreuve du groupe A.
+    await db.query(`update seances set debut = now() - interval '2 hours', fin = now() - interval '1 minute' where id = $1`, [q.e]);
+    let [r] = await en(ids.camille, 'select * from mon_resultat($1)', [q.e]);
     // Q1 : {A,B,C} contre {A,B} = 1 discordance = 0,5 ; Q2 : juste = 1 → 1,5 / 2 = 15/20
-    expect(Number(r.points)).toBe(1.5);
-    expect(Number(r.note20)).toBe(15);
-    expect(r.rang).toBe(1);
-    expect(r.effectif).toBe(1);
+    expect([Number(r.points), Number(r.note20), r.rang, r.effectif, r.groupes_restants]).toEqual([1.5, 15, 1, 1, 1]);
+    // Le groupe B n'a pas composé : pas de correction détaillée pour le groupe A.
+    expect(await en(ids.camille, 'select * from corrections')).toEqual([]);
+    await expect(en(ids.camille, `insert into entrainements (serie_id) values ($1)`, [q.e])).rejects.toThrow(/row-level/);
+    // Le groupe B compose : sa copie ne compte qu'à la fin de son épreuve.
+    await db.query(`update seances set debut = now() - interval '10 minutes', fin = now() + interval '1 hour' where id = $1`, [q.e2]);
+    await en(ids.leo, 'select commencer_epreuve($1)', [q.e2]);
+    await en(ids.leo, `select enregistrer_reponse($1, $2, '{A,B}', '', true)`, [q.e2, q.q1]);
+    await en(ids.leo, `select enregistrer_reponse($1, $2, '{}', 'ECG', true)`, [q.e2, q.q2]);
+    expect((await en(ids.camille, 'select effectif from mon_resultat($1)', [q.e]))[0].effectif).toBe(1);
+    await db.query(`update seances set fin = now() - interval '1 minute' where id = $1`, [q.e2]);
+    [r] = await en(ids.camille, 'select * from mon_resultat($1)', [q.e]);
+    expect([Number(r.note20), r.rang, r.effectif, Number(r.moyenne), r.groupes_restants]).toEqual([15, 2, 2, 17.5, 0]);
+    expect((await en(ids.leo, 'select rang from mon_resultat($1)', [q.e2]))[0].rang).toBe(1);
+    // Tous les groupes ont fini : correction visible, entraînement possible.
     expect((await en(ids.camille, 'select * from corrections')).length).toBe(2);
+    expect((await en(ids.camille, 'select correction_visible from infos_qcm($1)', [q.e]))[0].correction_visible).toBe(true);
+    await en(ids.camille, `insert into entrainements (serie_id, points, total) values ($1, 2, 2)`, [q.e]);
+    expect((await en(ids.camille, 'select points from entrainements')).length).toBe(1);
+    expect(await en(ids.leo, 'select * from entrainements')).toEqual([]);
+    await expect(en(ids.ines, `insert into entrainements (serie_id) values ($1)`, [q.e])).rejects.toThrow(/row-level/);
     const res = await en(ids.prof, 'select email, note20, rang from resultats_epreuve($1)', [q.e2]);
-    expect(res.map((x) => [x.email, Number(x.note20), x.rang])).toEqual([['camille@ex.fr', 15, 1]]);
+    expect(res.map((x) => [x.email, Number(x.note20), x.rang])).toEqual([['leo@ex.fr', 20, 1], ['camille@ex.fr', 15, 2]]);
   });
   it('une copie rendue n’est plus modifiable', async () => {
     await en(ids.camille, 'select rendre_copie($1)', [q.e]);

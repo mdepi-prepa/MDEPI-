@@ -35,7 +35,7 @@ export function questionCorrigee(q, num, correction, reponse, avecCopie) {
               <td class="lettre">${lettre(i)}</td>
               <td class="centre">${coche(c.bonnes.includes(p.id), 'Réponse attendue')}</td>
               ${avecCopie ? html`<td class="centre">${coche((reponse?.choix || []).includes(p.id), 'Votre réponse')}</td>` : ''}
-              <td>${brut(htmlQcm(p.texte))}${exp ? html`<div class="explication">${brut(htmlQcm(exp))}</div>` : ''}</td>
+              <td>${brut(htmlQcm(p.texte))}${v ? html`<span class="verdict-court">${VERDICTS[v]}</span>` : ''}${exp ? html`<div class="explication">${brut(htmlQcm(exp))}</div>` : ''}</td>
               ${avecCopie ? html`<td class="verdict">${VERDICTS[v] || ''}</td>` : ''}
             </tr>`;
           })}</tbody></table></div>`;

@@ -73,7 +73,7 @@ export function creerBackendSupabase(url, cleAnon) {
     },
     async infosQcm(seanceId) {
       const [r] = verifier(await sb.rpc('infos_qcm', { p_seance: seanceId }));
-      return r || { questions: 0, dossiers: 0 };
+      return r || { questions: 0, dossiers: 0, correction_visible: false, groupes_restants: 0 };
     },
     // Bonnes réponses : visibles par l'équipe, et par les étudiants une fois la correction publiée.
     async corrections(seanceId) {
@@ -156,6 +156,14 @@ export function creerBackendSupabase(url, cleAnon) {
     },
 
     // Résultats et copies de toute la série (équipe).
+    // Entraînement (épreuves terminées rejouées, hors classement).
+    async mesEntrainements() {
+      return verifier(await sb.from('entrainements').select('*').order('fait_le', { ascending: false }));
+    },
+    async enregistrerEntrainement(seanceId, reponses, points, total) {
+      const s = await this.seance(seanceId);
+      return verifier(await sb.from('entrainements').insert({ serie_id: serieDe(s), reponses, points, total }).select().single());
+    },
     async resultatsEpreuve(seanceId) {
       const rows = verifier(await sb.rpc('resultats_epreuve', { p_seance: seanceId }));
       return rows.map((r) => ({ ...r, points: Number(r.points), note20: Number(r.note20) }));

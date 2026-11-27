@@ -76,8 +76,20 @@ async function accueilEpreuve(app, s, infos, copie, ouverte) {
     </section>
     ${copie
       ? resultat
-        ? html`<section class="carte pile">${bandeauNote(resultat)}<a class="btn plein" href="#/epreuve/${s.id}/correction">Voir ma copie corrigée</a></section>`
-        : html`<p class="aide">La correction et votre note apparaîtront ici quand l'équipe les publiera.</p>`
+        ? html`<section class="carte pile">
+            <h2 class="titre-section">Mon résultat</h2>
+            ${bandeauNote(resultat)}
+            ${resultat.groupes_restants
+              ? html`<p class="alerte">Classement provisoire : ${resultat.groupes_restants === 1 ? 'un autre groupe doit encore' : `${resultat.groupes_restants} autres groupes doivent encore`} passer cette épreuve. Leurs notes s'ajouteront au classement.</p>`
+              : html`<p class="aide">Classement définitif : tous les groupes ont passé l'épreuve.</p>`}
+            ${infos.correction_visible
+              ? html`<a class="btn plein" href="#/epreuve/${s.id}/correction">Voir ma copie corrigée</a>`
+              : html`<p class="aide">La copie corrigée sera visible quand tous les groupes auront passé l'épreuve.</p>`}
+          </section>`
+        : html`<p class="aide">Votre note et votre rang apparaîtront ici à la fin de l'épreuve, le ${dateLongue(s.fin).toLowerCase()} à ${heure(s.fin)}.</p>`
+      : ''}
+    ${infos.correction_visible && !ouverte && !avant && !equipe
+      ? html`<a class="btn contour" href="#/entrainement/${s.id}">Rejouer cette épreuve en entraînement</a>`
       : ''}
   </div>`;
 
@@ -391,9 +403,9 @@ async function passage(app, s, copie) {
 // Copie corrigée de l'étudiant.
 export async function vueMaCorrection(app, { id }) {
   const s = await app.api.seance(id);
-  const [qcm, corrections, copie, resultat] = await Promise.all([app.api.qcm(id), app.api.corrections(id), app.api.maCopie(id), app.api.monResultat(id)]);
-  if (!s || !resultat) {
-    return { html: html`<div class="page">${enTete('Correction', null, `#/epreuve/${id}`)}<p>La correction n'est pas encore publiée.</p></div>` };
+  const [qcm, corrections, copie, resultat, infos] = await Promise.all([app.api.qcm(id), app.api.corrections(id), app.api.maCopie(id), app.api.monResultat(id), app.api.infosQcm(id)]);
+  if (!s || !resultat || !infos.correction_visible) {
+    return { html: html`<div class="page">${enTete('Correction', null, `#/epreuve/${id}`)}<p>La copie corrigée sera visible quand tous les groupes auront passé l'épreuve.</p></div>` };
   }
   const vue = html`<div class="page">
     ${enTete('Ma copie corrigée', null, `#/epreuve/${id}`)}

@@ -5,7 +5,7 @@ import { peutVoirSeance, peutVoirAnnonce, estAdmin, estEquipe } from '../lib/acc
 import { serieDe, noterCopie, imagesUtilisees, renommerImages } from '../lib/qcm.js';
 import { QCM_DEMO } from './demo-qcm.js';
 
-const CLE = 'mdepi-demo-v4';
+const CLE = 'mdepi-demo-v5';
 export const CODE_DEMO = '123456';
 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2));
@@ -85,7 +85,9 @@ function donneesInitiales() {
     }),
     s('CCB n°3 · examen blanc', 'Toutes matières', jour(15, 9), jour(15, 12), '106 rue Sainte-Cécile', { epreuve: true, zoom_url: null, groupes: [gA] }),
     s('CCB n°3 · examen blanc', 'Toutes matières', jour(16, 9), jour(16, 12), '106 rue Sainte-Cécile', { epreuve: true, zoom_url: null, groupes: [gB] }),
-    s('CCB n°2 · hépato-gastro', 'Hépato-gastro-entérologie', jour(-10, 9), jour(-10, 12), '106 rue Sainte-Cécile', { epreuve: true, zoom_url: null, correction_publiee: true }),
+    s('CCB n°2 · hépato-gastro', 'Hépato-gastro-entérologie', jour(-10, 9), jour(-10, 12), '106 rue Sainte-Cécile', { epreuve: true, zoom_url: null }),
+    s('Partiel blanc · hépato-biliaire', 'Hépato-gastro-entérologie', jour(-2, 9), jour(-2, 11), '106 rue Sainte-Cécile', { epreuve: true, zoom_url: null, groupes: [gA] }),
+    s('Partiel blanc · hépato-biliaire', 'Hépato-gastro-entérologie', jour(2, 9), jour(2, 11), '106 rue Sainte-Cécile', { epreuve: true, zoom_url: null, groupes: [gB] }),
     s('Épreuve en ligne · HGE', 'Hépato-gastro-entérologie', minutes(-20), minutes(100), 'En ligne', { epreuve: true, zoom_url: null }),
     s('Hématologie : anémies', 'Hématologie', jour(18, 18, 30), jour(18, 21, 30), '94 rue Sainte-Cécile', { annulee: true, modifiee_le: jour(0, 8) }),
     s('Endocrinologie : diabète de type 2', 'Endocrinologie', jour(-3, 18, 30), jour(-3, 21, 22), '94 rue Sainte-Cécile', {
@@ -113,6 +115,9 @@ function donneesInitiales() {
   // CCB n°3 : même épreuve pour les groupes A et B (une série, un classement).
   const [ccb3A, ccb3B] = seances.filter((x) => x.titre.startsWith('CCB n°3'));
   ccb3B.serie = ccb3A.id;
+  // Partiel blanc : le groupe A l'a passé, le groupe B le passe dans deux jours.
+  const [partielA, partielB] = seances.filter((x) => x.titre.startsWith('Partiel blanc'));
+  partielB.serie = partielA.id;
   const documents = [
     { id: uid(), seance_id: par('Endocrino').id, type: 'support', titre: 'Diabète de type 2 – support', chemin: 'demo/support.pdf' },
     { id: uid(), seance_id: par('Endocrino').id, type: 'correction', titre: 'Diabète de type 2 – diapos de correction', chemin: 'demo/correction.pdf' },
@@ -131,24 +136,31 @@ function donneesInitiales() {
   poser(par('Épreuve en ligne'), [...QCM_DEMO.dp4, ...QCM_DEMO.kfp2]);
   poser(ccb3A, QCM_DEMO.dp4);
 
-  // CCB n°2 : copies fictives des étudiants de D2 (réponses plus ou moins justes).
-  const ccb2 = par('CCB n°2');
-  const questions = qcm.questions.filter((q) => q.serie_id === ccb2.id);
-  inscrits.filter((i) => i.promo === 'D2').forEach((i, n) => {
-    const alea = hasard(n + 7);
-    const niveau = 0.8 + 0.18 * alea();
-    const reponses = {};
-    for (const q of questions) {
-      const c = qcm.corrections[q.id];
-      const choix = q.propositions.filter((p) => (alea() < niveau) === c.bonnes.includes(p.id)).map((p) => p.id);
-      const variantes = REPONSES_QROC_DEMO[q.qti_id] || [];
-      const texte = q.type === 'QROC' ? variantes[Math.floor(alea() * variantes.length)] || '' : '';
-      reponses[q.id] = { question_id: q.id, choix: q.type === 'QRU' ? choix.slice(0, 1) : choix, texte, validee: true, modifiee_le: jour(-10, 10) };
-    }
-    qcm.copies.push({ id: uid(), seance_id: ccb2.id, user_id: i.email, commencee_le: jour(-10, 9, 2), rendue_le: jour(-10, 11, 40 - n * 3), reponses });
-  });
+  poser(partielA, [...QCM_DEMO.dp4, ...QCM_DEMO.kfp2]);
 
-  return { groupes, inscrits, seances, documents, annonces, lues: {}, session: null, ...qcm };
+  // Copies fictives (réponses plus ou moins justes) des étudiants concernés.
+  const semer = (seance, j, graine) => {
+    const questions = qcm.questions.filter((q) => q.serie_id === seance.id);
+    inscrits
+      .filter((i) => i.promo === 'D2' && (!seance.groupes.length || seance.groupes.includes(i.groupe_id)))
+      .forEach((i, n) => {
+        const alea = hasard(n + graine);
+        const niveau = 0.8 + 0.18 * alea();
+        const reponses = {};
+        for (const q of questions) {
+          const c = qcm.corrections[q.id];
+          const choix = q.propositions.filter((p) => (alea() < niveau) === c.bonnes.includes(p.id)).map((p) => p.id);
+          const variantes = REPONSES_QROC_DEMO[q.qti_id] || [];
+          const texte = q.type === 'QROC' ? variantes[Math.floor(alea() * variantes.length)] || '' : '';
+          reponses[q.id] = { question_id: q.id, choix: q.type === 'QRU' ? choix.slice(0, 1) : choix, texte, validee: true, modifiee_le: jour(j, 10) };
+        }
+        qcm.copies.push({ id: uid(), seance_id: seance.id, user_id: i.email, commencee_le: jour(j, 9, 2), rendue_le: jour(j, 10, 50 - n * 3), reponses });
+      });
+  };
+  semer(par('CCB n°2'), -10, 7);
+  semer(partielA, -2, 3);
+
+  return { groupes, inscrits, seances, documents, annonces, lues: {}, session: null, entrainements: [], ...qcm };
 }
 
 // Range un QCM (dossiers issus de l'import) dans la base de démo.
@@ -201,9 +213,12 @@ export function creerBackendDemo() {
   const ouverte = (s) => s.epreuve && !s.annulee && new Date(s.debut) <= new Date() && new Date() <= new Date(new Date(s.fin).getTime() + 2 * 60000);
   const serieVisible = (serie, test) => estEquipe(profil()) || db.seances.some((x) => serieDe(x) === serie && peutVoirSeance(profil(), x) && test(x));
   const voirSujet = (serie) => serieVisible(serie, (x) => new Date(x.debut) <= new Date());
-  const voirCorrection = (serie) => serieVisible(serie, (x) => x.correction_publiee);
-  const notesSerie = (serie) => {
-    const ids = new Set(db.seances.filter((x) => serieDe(x) === serie).map((x) => x.id));
+  // Même règle que peut_voir_correction (schema.sql) : tous les groupes ont fini, ou publication anticipée.
+  const serieTerminee = (serie) => !db.seances.some((x) => serieDe(x) === serie && !x.annulee && new Date(x.fin) > new Date());
+  const groupesRestants = (serie) => db.seances.filter((x) => serieDe(x) === serie && !x.annulee && new Date(x.fin) > new Date()).length;
+  const voirCorrection = (serie) => serieVisible(serie, (x) => x.correction_publiee || (new Date(x.debut) <= new Date() && serieTerminee(serie)));
+  const notesSerie = (serie, finies = false) => {
+    const ids = new Set(db.seances.filter((x) => serieDe(x) === serie && (!finies || new Date(x.fin) <= new Date())).map((x) => x.id));
     const questions = db.questions.filter((q) => q.serie_id === serie);
     const lignes = db.copies
       .filter((c) => ids.has(c.seance_id))
@@ -293,7 +308,13 @@ export function creerBackendDemo() {
     async infosQcm(seanceId) {
       const s = await this.seance(seanceId);
       const serie = s && serieDe(s);
-      return { questions: db.questions.filter((q) => q.serie_id === serie).length, dossiers: db.dossiers.filter((d) => d.serie_id === serie).length };
+      if (!s) return { questions: 0, dossiers: 0, correction_visible: false, groupes_restants: 0 };
+      return {
+        questions: db.questions.filter((q) => q.serie_id === serie).length,
+        dossiers: db.dossiers.filter((d) => d.serie_id === serie).length,
+        correction_visible: voirCorrection(serie),
+        groupes_restants: groupesRestants(serie),
+      };
     },
     async corrections(seanceId) {
       const s = await this.seance(seanceId);
@@ -380,12 +401,23 @@ export function creerBackendDemo() {
     },
     async monResultat(seanceId) {
       const s = await this.seance(seanceId);
-      if (!s || !s.correction_publiee) return null;
-      const notes = notesSerie(serieDe(s));
+      if (!s || new Date() < new Date(s.fin)) return null;
+      const notes = notesSerie(serieDe(s), true);
       const moi = notes.find((n) => n.seance_id === seanceId && n.user_id === db.session);
       if (!moi) return null;
       const moyenne = Math.round((100 * notes.reduce((a, n) => a + n.note20, 0)) / notes.length) / 100;
-      return { points: moi.points, total: moi.total, note20: moi.note20, moyenne, rang: moi.rang, effectif: notes.length };
+      return { points: moi.points, total: moi.total, note20: moi.note20, moyenne, rang: moi.rang, effectif: notes.length, groupes_restants: groupesRestants(serieDe(s)) };
+    },
+    async mesEntrainements() {
+      return db.entrainements.filter((e) => e.user_id === db.session).sort((a, b) => b.fait_le.localeCompare(a.fait_le));
+    },
+    async enregistrerEntrainement(seanceId, reponses, points, total) {
+      const s = await this.seance(seanceId);
+      if (!s || !voirCorrection(serieDe(s))) throw new Error("Vous n'avez pas les droits pour cette action.");
+      const e = { id: uid(), user_id: db.session, serie_id: serieDe(s), reponses, points, total, fait_le: new Date().toISOString() };
+      db.entrainements.push(e);
+      sauver();
+      return e;
     },
     async resultatsEpreuve(seanceId) {
       exiger(estEquipe);

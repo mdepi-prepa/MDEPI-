@@ -82,13 +82,14 @@ function blocEpreuve(s, infos, copie, equipe) {
   const avant = maintenant < new Date(s.debut);
   let contenu;
   if (equipe) contenu = html`<a class="btn plein" href="#/admin/epreuves/${s.id}/qcm">QCM et résultats</a>`;
-  else if (copie?.rendue_le) {
-    contenu = s.correction_publiee
-      ? html`<p class="alerte vert">Copie envoyée. La correction est publiée.</p><a class="btn plein" href="#/epreuve/${s.id}">Voir ma note et ma correction</a>`
-      : html`<p class="alerte vert">Copie envoyée. Votre note apparaîtra ici à la publication de la correction.</p>`;
-  } else if (ouverte) contenu = html`<a class="btn plein grand" href="#/epreuve/${s.id}">${copie ? "Reprendre l'épreuve" : "Passer l'épreuve"}</a>`;
+  else if (copie && !ouverte && !avant) contenu = html`<a class="btn plein" href="#/epreuve/${s.id}">Voir ma note et mon classement</a>`;
+  else if (copie?.rendue_le) contenu = html`<p class="alerte vert">Copie envoyée. Votre note et votre rang apparaîtront ici à la fin de l'épreuve (${heure(s.fin)}).</p>`;
+  else if (ouverte) contenu = html`<a class="btn plein grand" href="#/epreuve/${s.id}">${copie ? "Reprendre l'épreuve" : "Passer l'épreuve"}</a>`;
   else if (avant) contenu = html`<p class="aide">L'épreuve s'ouvrira ici le ${dateLongue(s.debut).toLowerCase()} à ${heure(s.debut)}.</p>`;
-  else contenu = copie ? html`<a class="btn contour" href="#/epreuve/${s.id}">Voir ma copie</a>` : html`<p class="aide">Vous n'avez pas passé cette épreuve dans l'app.</p>`;
+  else contenu = html`<p class="aide">Vous n'avez pas passé cette épreuve dans l'app.</p>`;
+  if (!equipe && infos.correction_visible && !ouverte && !avant) {
+    contenu = html`${contenu}<a class="btn contour" href="#/entrainement/${s.id}">Rejouer en entraînement</a>`;
+  }
   return html`<section class="carte pile carte-qcm">
     <h2 class="titre-section">Épreuve en ligne</h2>
     <p>${infos.questions} question${infos.questions > 1 ? 's' : ''} en ${infos.dossiers} dossier${infos.dossiers > 1 ? 's' : ''} (DP, KFP), à cocher dans l'app.</p>

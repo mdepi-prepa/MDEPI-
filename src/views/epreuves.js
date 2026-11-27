@@ -37,7 +37,7 @@ export async function vueEpreuves(app) {
 
   const lignePassee = (s) => html`<a class="ligne-info" href="#/seance/${s.id}">
     <span class="pile-mini"><strong>${s.titre}</strong><span class="aide">${dateCourte(s.debut)}${equipe ? ` · ${cible(s)}` : ''}</span></span>
-    <span class="lien-accent">${s.correction_publiee ? 'Note et correction' : 'Sujet et correction'} ${icones.chevron(14)}</span>
+    <span class="lien-accent">Note et classement ${icones.chevron(14)}</span>
   </a>`;
 
   return {

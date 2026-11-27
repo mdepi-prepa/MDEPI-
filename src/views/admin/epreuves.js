@@ -28,7 +28,7 @@ export async function vueAdminEpreuves(app) {
           ${s.annulee ? html`<div class="etiquettes"><span class="etiquette annulee">Annulée</span></div>` : ''}</td>
         <td>${nomsGroupes(s)}</td>
         <td>${s._qcm
-          ? html`<a class="lien-petit" href="#/admin/epreuves/${s.id}/qcm">${s._qcm} questions</a>${s.correction_publiee ? html`<br><span class="aide">Correction publiée</span>` : ''}`
+          ? html`<a class="lien-petit" href="#/admin/epreuves/${s.id}/qcm">${s._qcm} questions</a>`
           : html`<a class="lien-petit" href="#/admin/epreuves/${s.id}/qcm">Importer</a>`}</td>
         <td>${s._docs}</td>
         <td><a class="lien-petit" href="#/admin/seances/copie/${s.id}">Dupliquer</a>${s._qcm ? html`<br><a class="lien-petit" href="#/admin/epreuves/${s.id}/resultats">Résultats</a>` : ''}</td>

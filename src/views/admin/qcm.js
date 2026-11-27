@@ -26,6 +26,7 @@ export async function vueAdminQcm(app, { id }) {
   if (!s) return { html: html`<div class="page">${enteteAdmin('Épreuve introuvable', '#/admin/epreuves')}</div>` };
   const qcm = await app.api.qcm(id);
   const nbQ = qcm.reduce((n, d) => n + d.questions.length, 0);
+  const restants = serie.filter((x) => !x.annulee && new Date(x.fin) > new Date()).length;
   let importe = null; // { dossiers, images, msgs }
 
   const vue = html`<div class="page">
@@ -40,11 +41,14 @@ export async function vueAdminQcm(app, { id }) {
             <a class="btn plein" href="#/admin/epreuves/${id}/resultats">Résultats et copies</a>
             ${qcm.some((d) => d.questions.some((q) => q.type === 'QROC')) ? html`<a class="btn contour" href="#/admin/epreuves/${id}/qroc">Vérifier les QROC</a>` : ''}
             <a class="btn contour" href="#/admin/epreuves/${id}/corrige">Sujet corrigé (aperçu, PDF)</a>
-            <button class="btn contour" data-action="publier">${s.correction_publiee ? 'Masquer la correction et les notes' : 'Publier la correction et les notes'}</button>
+            ${restants ? html`<button class="btn contour" data-action="publier">${s.correction_publiee ? 'Masquer la copie corrigée' : 'Publier la copie corrigée dès maintenant'}</button>` : ''}
           </div>
-          <p class="aide">${s.correction_publiee
-            ? 'Correction publiée : chaque étudiant voit sa copie corrigée, sa note, la moyenne et son rang.'
-            : 'Correction non publiée : les étudiants ne voient ni les bonnes réponses ni leur note. Publiez quand tous les groupes ont passé l’épreuve.'}</p>`
+          <p class="aide">Chaque étudiant voit sa note, la moyenne et son rang dès la fin de son épreuve ; les groupes suivants s'ajoutent au classement.
+            ${restants
+              ? s.correction_publiee
+                ? 'Copie corrigée publiée en avance : attention, les groupes qui n’ont pas encore composé peuvent la voir.'
+                : `La copie corrigée (bonnes réponses) s'affichera automatiquement quand le dernier groupe aura fini (${restants} groupe${restants > 1 ? 's' : ''} restant${restants > 1 ? 's' : ''}).`
+              : 'Tous les groupes ont fini : copie corrigée visible, épreuve disponible en entraînement.'}</p>`
         : ''}
     </section>
 
@@ -97,7 +101,7 @@ export async function vueAdminQcm(app, { id }) {
         }
         if (action === 'publier') {
           await app.api.publierCorrection(id, !s.correction_publiee);
-          app.message(s.correction_publiee ? 'Correction masquée.' : 'Correction et notes publiées.');
+          app.message(s.correction_publiee ? 'Copie corrigée masquée.' : 'Copie corrigée publiée.');
           app.rafraichir();
         }
         if (action === 'supprimer' && confirm('Supprimer le QCM de cette épreuve (tous les groupes de la série) ?')) {
@@ -157,7 +161,7 @@ export async function vueAdminResultats(app, { id }) {
         <div><dt>Médiane</dt><dd>${formatNote(mediane)}</dd></div>
         <div><dt>Min – max</dt><dd>${notes.length ? `${formatNote(notes[0])} – ${formatNote(notes.at(-1))}` : '–'}</dd></div>
       </dl>
-      <p class="aide">${s.correction_publiee ? 'Notes publiées aux étudiants.' : 'Notes pas encore publiées aux étudiants.'}</p>
+      <p class="aide">Les étudiants voient leur note et leur rang dès la fin de leur épreuve.${serie.some((x) => !x.annulee && new Date(x.fin) > new Date()) ? ' Classement provisoire : un groupe au moins doit encore composer.' : ''}</p>
       ${questions.some((q) => q.type === 'QROC') ? html`<a class="btn contour" href="#/admin/epreuves/${id}/qroc">Vérifier la correction automatique des QROC</a>` : ''}
       <h3 class="titre-section">Sauvegardes</h3>
       <div class="actions">

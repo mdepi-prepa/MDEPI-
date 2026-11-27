@@ -30,6 +30,7 @@ function clean(node,ctx){
   if(c.nodeType!==1)continue;
   const n=c.localName.toLowerCase();
   const st=(c.getAttribute&&c.getAttribute('style'))||'';
+  const kl=n==='span'&&c.getAttribute('class');if(!st&&/^c-(ok|ko|note)$/.test(kl||'')){out+=`<span class="${kl}">${clean(c,ctx)}</span>`;continue}
   if(st&&(n==='span'||n==='p'||n==='div')){const cls=tone(st),bold=/font-weight:\s*(bold|[6-9]00)/i.test(st);let inner=clean(c,ctx);if(bold)inner=`<strong>${inner}</strong>`;if(cls)inner=`<span class="${cls}">${inner}</span>`;out+=n==='span'?inner:`<${n}>${inner}</${n}>`;continue}
   if(n==='img'||n==='object'||n==='qti-object'||n==='matimage'){out+=imgTag(c.getAttribute('src')||c.getAttribute('data')||c.getAttribute('uri'),c.getAttribute('alt'),ctx);continue}
   if(n==='mattext'&&/html/i.test(c.getAttribute('texttype')||'')){out+=clean(new DOMParser().parseFromString(c.textContent,'text/html').body,ctx);continue}
