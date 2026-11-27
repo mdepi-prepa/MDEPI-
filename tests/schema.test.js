@@ -386,6 +386,17 @@ describe('comptes', () => {
     expect((await en(ids.camille, 'select email from profils')).map((r) => r.email)).toEqual(['camille@ex.fr']);
     expect(await en(ids.camille, 'select * from inscrits')).toEqual([]);
   });
+  it('seul un admin crée un compte à la main, y compris un autre admin', async () => {
+    const ajout = `insert into inscrits (email, prenom, nom, role) values ('nouvel.admin@ex.fr', 'N', 'A', 'admin')`;
+    await expect(en(ids.prof, ajout)).rejects.toThrow(/row-level security/);
+    await expect(en(ids.camille, ajout)).rejects.toThrow(/row-level security/);
+    await en(ids.admin, ajout);
+    const nouveau = await inscrire('nouvel.admin@ex.fr');
+    expect((await db.query('select role from profils where id = $1', [nouveau])).rows[0].role).toBe('admin');
+    await en(ids.admin, `update inscrits set role = 'enseignant' where email = 'nouvel.admin@ex.fr'`);
+    expect((await db.query('select role from profils where id = $1', [nouveau])).rows[0].role).toBe('enseignant');
+    await en(ids.admin, `delete from inscrits where email = 'nouvel.admin@ex.fr'`);
+  });
   it('désactiver un inscrit coupe son accès', async () => {
     await en(ids.admin, `update inscrits set actif = false where email = 'leo@ex.fr'`);
     expect(await en(ids.leo, 'select titre from seances')).toEqual([]);

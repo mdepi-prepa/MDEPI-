@@ -51,7 +51,7 @@ export async function vueConnexion(app) {
             <strong>Mode démo</strong> : aucune base n'est branchée. Choisissez un compte fictif (code ${CODE_DEMO}).
             <div class="demo-comptes">
               ${comptes.map(
-                (c) => html`<button type="button" class="puce" data-demo="${c.email}">${c.prenom} · ${c.role === 'etudiant' ? libellePromo(c.promo) : c.role === 'admin' ? 'Admin' : 'Enseignant'}</button>`
+                (c) => html`<button type="button" class="puce" data-demo="${c.email}">${c.prenom} · ${c.role === 'etudiant' ? libellePromo(c.promo) : c.role === 'admin' ? 'Admin' : 'Conférencier'}</button>`
               )}
             </div>
           </div>`

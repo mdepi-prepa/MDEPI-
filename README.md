@@ -100,6 +100,7 @@ GitHub Pages n'est pas conseillé ici : pour un dépôt privé, il demande un ab
 | Tâche | Où |
 |---|---|
 | Ajouter les inscrits | Back-office › Comptes › Importer (CSV avec l'en-tête `email;prenom;nom;promo;groupe`, colonne `role` facultative) |
+| Créer un compte à la main (étudiant, conférencier, admin) | Back-office › Comptes › Ajouter un compte ; le rôle et l'accès se changent ensuite dans la liste |
 | Changer un étudiant de promo ou de groupe, le désactiver | Back-office › Comptes, directement dans le tableau |
 | Créer les groupes de rotation | Back-office › Comptes › Groupes (ou automatiquement à l'import) |
 | Passage à l'année suivante | Back-office › Comptes, en bas (D4 désactivés, D1→D2, D2→D3, D3→D4) |
@@ -117,7 +118,7 @@ GitHub Pages n'est pas conseillé ici : pour un dépôt privé, il demande un ab
 
 **Passage d'une épreuve** (côté étudiant, sur le modèle de Théia) : page d'informations (ouverture, fermeture, temps restant), puis questions numérotées par dossier. Dans un dossier progressif, il faut valider une question pour voir la suivante : la base n'envoie la question suivante qu'après validation de la précédente (on ne peut pas la lire en avance), et une question validée n'est plus modifiable. Chaque clic est enregistré ; sans réseau, les réponses attendent sur le téléphone et partent au retour de la connexion. « Tout envoyer et terminer » montre un résumé ; à l'heure de fin, la copie part toute seule. Barème (comme Théia et l'EDN, détail en tête de `src/lib/bareme.js`) : QRM 1 point sans erreur, 0,5 avec une, 0,2 avec deux, 0 au-delà, 0 si aucune case cochée ; QRU 1 point ; QRP bonnes cochées ÷ n ; QROC 1 point (0,5 si l'équipe la juge « acceptable ») ; proposition indispensable oubliée ou inacceptable cochée = 0 à la question ; chaque question compte pour son coefficient. Les QROC sont corrigées automatiquement (`src/lib/qroc.js` et `qroc_juste` en SQL) : majuscules, accents, articles, pluriels et ordre des mots ignorés, abréviations courantes reconnues (TDM, AP, ECG, écho…), une faute de frappe tolérée sur les mots longs mais jamais sur un chiffre, une négation, le début ou la fin du mot (hypo/hyper, -ite/-ose). Note sur 20, moyenne et rang sont calculés par la base sur toute la série (tous les groupes).
 
-Rôles : **admin** (tout), **enseignant** (planning, replays, documents), **étudiant**. Un étudiant ne voit que les séances de sa promo et de son groupe (une séance sans groupe coché concerne toute la promo), et les annonces de sa promo.
+Rôles : **admin** (tout, dont les comptes), **conférencier** (planning, replays, épreuves, documents ; valeur `enseignant` en base et `conferencier` ou `enseignant` accepté dans le CSV), **étudiant**. Un admin peut créer un compte à la main (Back-office › Comptes › Ajouter un compte), changer un rôle ou désactiver un compte ; lui seul peut nommer un autre admin. Un étudiant ne voit que les séances de sa promo et de son groupe (une séance sans groupe coché concerne toute la promo), et les annonces de sa promo.
 
 ---
 

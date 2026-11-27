@@ -68,7 +68,9 @@ export function lireCsvInscrits(texte) {
     vus.add(email);
     let promo = get('promo').toUpperCase().replace(/\s/g, '');
     if (promo && !CODES_PROMOS.includes(promo)) return erreurs.push(`Ligne ${num} : promo « ${get('promo')} » inconnue (D1, D2, D3 ou D4).`);
-    let role = sansAccents(get('role').toLowerCase()) || 'etudiant';
+    let role = sansAccents(get('role').toLowerCase().trim()) || 'etudiant';
+    // « conférencier » est le libellé affiché du rôle enseignant.
+    if (role === 'conferencier') role = 'enseignant';
     if (!['etudiant', 'enseignant', 'admin'].includes(role)) return erreurs.push(`Ligne ${num} : rôle « ${get('role')} » inconnu.`);
     if (role === 'etudiant' && !promo) return erreurs.push(`Ligne ${num} : promo manquante pour ${email}.`);
     lignes.push({ email, prenom: get('prenom'), nom: get('nom'), promo: promo || null, groupe: get('groupe'), role });

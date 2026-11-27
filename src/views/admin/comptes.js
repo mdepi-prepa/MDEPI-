@@ -5,7 +5,10 @@ import { lireCsvInscrits } from '../../lib/csv.js';
 import { enteteAdmin } from './index.js';
 import { vide } from '../commun.js';
 
-const ROLES = { etudiant: 'Étudiant', enseignant: 'Enseignant', admin: 'Admin' };
+// Le rôle « enseignant » (valeur en base) s'affiche « Conférencier » : mêmes
+// droits (planning, replays, épreuves, documents), pas d'accès aux comptes.
+const ROLES = { etudiant: 'Étudiant', enseignant: 'Conférencier', admin: 'Admin' };
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export async function vueAdminComptes(app) {
   const [inscrits, groupes] = await Promise.all([app.api.inscrits(), app.api.groupes()]);
@@ -18,8 +21,27 @@ export async function vueAdminComptes(app) {
     ${enteteAdmin('Comptes')}
 
     <section class="carte pile">
+      <h2 class="titre-section">Ajouter un compte</h2>
+      <p class="aide">La personne se connecte ensuite avec cette adresse : elle reçoit un code par e-mail, sans mot de passe à créer.
+        Un conférencier gère le planning, les replays et les épreuves ; un admin a en plus accès aux comptes.</p>
+      <form id="f-compte" class="pile">
+        <div class="grille-3">
+          <label class="champ"><span>Adresse e-mail</span><input name="email" type="email" required autocomplete="off" placeholder="prenom.nom@exemple.fr"></label>
+          <label class="champ"><span>Prénom</span><input name="prenom" required autocomplete="off"></label>
+          <label class="champ"><span>Nom</span><input name="nom" required autocomplete="off"></label>
+        </div>
+        <div class="grille-3">
+          <label class="champ"><span>Rôle</span><select name="role">${Object.entries(ROLES).map(([k, v]) => html`<option value="${k}">${v}</option>`)}</select></label>
+          <label class="champ" data-etudiant><span>Promo</span><select name="promo">${CODES_PROMOS.map((p) => html`<option>${p}</option>`)}</select></label>
+          <label class="champ" data-etudiant><span>Groupe</span><select name="groupe_id"></select></label>
+        </div>
+        <div class="actions"><button class="btn plein" type="submit">Créer le compte</button></div>
+      </form>
+    </section>
+
+    <section class="carte pile">
       <h2 class="titre-section">Importer des inscrits (CSV)</h2>
-      <p class="aide">Une ligne par personne, avec l'en-tête <code>email;prenom;nom;promo;groupe</code> (colonne <code>role</code> facultative : etudiant, enseignant ou admin).
+      <p class="aide">Une ligne par personne, avec l'en-tête <code>email;prenom;nom;promo;groupe</code> (colonne <code>role</code> facultative : etudiant, conferencier ou admin).
         Une adresse déjà connue est mise à jour. Un groupe inconnu est créé automatiquement.</p>
       <input type="file" accept=".csv,text/csv" id="csv-fichier" aria-label="Fichier CSV">
       <textarea id="csv-texte" rows="4" placeholder="email;prenom;nom;promo;groupe&#10;camille.martin@exemple.fr;Camille;Martin;D2;Groupe A"></textarea>
@@ -56,19 +78,23 @@ export async function vueAdminComptes(app) {
         ? html`<div class="tableau-defile"><table class="tableau">
             <thead><tr><th>Nom</th><th>E-mail</th><th>Rôle</th><th>Promo</th><th>Groupe</th><th>Actif</th></tr></thead>
             <tbody>${liste.map(
-              (i) => html`<tr class="${i.actif ? '' : 'inactif'}" data-email="${i.email}">
+              (i) => {
+              // Pas de retrait de ses propres droits : on ne peut pas s'enfermer dehors.
+              const moi = i.email === app.profil?.email;
+              return html`<tr class="${i.actif ? '' : 'inactif'}" data-email="${i.email}">
                 <td>${i.prenom} ${i.nom}</td>
                 <td>${i.email}</td>
-                <td><select data-champ="role" aria-label="Rôle">${Object.entries(ROLES).map(([k, v]) => html`<option value="${k}" ${i.role === k ? 'selected' : ''}>${v}</option>`)}</select></td>
+                <td><select data-champ="role" aria-label="Rôle" ${moi ? 'disabled title="Votre propre rôle"' : ''}>${Object.entries(ROLES).map(([k, v]) => html`<option value="${k}" ${i.role === k ? 'selected' : ''}>${v}</option>`)}</select></td>
                 <td><select data-champ="promo" aria-label="Promo"><option value="">–</option>${CODES_PROMOS.map((p) => html`<option ${i.promo === p ? 'selected' : ''}>${p}</option>`)}</select></td>
                 <td><select data-champ="groupe_id" aria-label="Groupe"><option value="">Aucun</option>${groupes
                   .filter((g) => g.promo === i.promo)
                   .map((g) => html`<option value="${g.id}" ${i.groupe_id === g.id ? 'selected' : ''}>${g.nom}</option>`)}</select></td>
-                <td><input type="checkbox" data-champ="actif" ${i.actif ? 'checked' : ''} aria-label="Compte actif"></td>
-              </tr>`
+                <td><input type="checkbox" data-champ="actif" ${i.actif ? 'checked' : ''} ${moi ? 'disabled' : ''} aria-label="Compte actif"></td>
+              </tr>`;
+            }
             )}</tbody></table></div>`
         : vide('Aucun inscrit.')}
-      <p class="aide">Décocher « Actif » coupe immédiatement l'accès. Changer la promo ou le groupe change ce que l'étudiant voit.</p>
+      <p class="aide">Changer le rôle ou décocher « Actif » s'applique immédiatement (décocher coupe l'accès sans rien effacer). Changer la promo ou le groupe change ce que l'étudiant voit.</p>
     </section>
 
     <section class="carte pile zone-danger">
@@ -82,6 +108,41 @@ export async function vueAdminComptes(app) {
 
   function monter(el) {
     const resultat = el.querySelector('#csv-resultat');
+    const fc = el.querySelector('#f-compte');
+    const majFormulaire = () => {
+      const etudiant = fc.role.value === 'etudiant';
+      fc.querySelectorAll('[data-etudiant]').forEach((x) => (x.hidden = !etudiant));
+      fc.groupe_id.innerHTML = String(html`<option value="">Aucun</option>${groupes
+        .filter((g) => g.promo === fc.promo.value)
+        .map((g) => html`<option value="${g.id}">${g.nom}</option>`)}`);
+    };
+    fc.role.addEventListener('change', majFormulaire);
+    fc.promo.addEventListener('change', majFormulaire);
+    majFormulaire();
+    fc.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const d = Object.fromEntries(new FormData(fc));
+      const email = String(d.email).trim().toLowerCase();
+      if (!EMAIL.test(email)) return app.message('Adresse e-mail invalide.', 'erreur');
+      if (inscrits.some((i) => i.email === email)) return app.message('Cette adresse a déjà un compte : modifiez-le dans la liste.', 'erreur');
+      const etudiant = d.role === 'etudiant';
+      const ligne = {
+        email,
+        prenom: String(d.prenom).trim(),
+        nom: String(d.nom).trim(),
+        role: d.role,
+        promo: etudiant ? d.promo : null,
+        groupe_id: etudiant ? d.groupe_id || null : null,
+        actif: true,
+      };
+      try {
+        await app.api.enregistrerInscrits([ligne]);
+        app.message(`Compte créé pour ${ligne.prenom} ${ligne.nom} (${ROLES[d.role].toLowerCase()}).`);
+        app.rafraichir();
+      } catch (err) {
+        app.message(err.message, 'erreur');
+      }
+    });
     el.querySelector('#csv-fichier').addEventListener('change', async (e) => {
       const f = e.target.files[0];
       if (f) el.querySelector('#csv-texte').value = await f.text();

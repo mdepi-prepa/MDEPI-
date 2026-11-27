@@ -72,6 +72,11 @@ describe('import CSV des inscrits', () => {
     expect(r.lignes[0].nom).toBe('Dupont, épouse X');
     expect(r.lignes[1]).toMatchObject({ role: 'enseignant', promo: null });
   });
+  it('accepte « conférencier » comme rôle enseignant', () => {
+    const r = lireCsvInscrits('email;prenom;nom;promo;role\nc@ex.fr;Claire;C;;Conférencier');
+    expect(r.erreurs).toEqual([]);
+    expect(r.lignes[0]).toMatchObject({ role: 'enseignant', promo: null });
+  });
   it('signale les lignes invalides sans bloquer les autres', () => {
     const r = lireCsvInscrits('email;promo\npas-un-mail;D1\nx@ex.fr;D7\ny@ex.fr;\nz@ex.fr;D3\nz@ex.fr;D3');
     expect(r.lignes.map((l) => l.email)).toEqual(['z@ex.fr']);

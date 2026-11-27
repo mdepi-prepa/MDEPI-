@@ -7,7 +7,7 @@ export async function vueProfil(app) {
   const p = app.profil;
   const groupes = p.groupe_id ? await app.api.groupes().catch(() => []) : [];
   const groupe = groupes.find((g) => g.id === p.groupe_id);
-  const role = { etudiant: 'Étudiant', enseignant: 'Enseignant', admin: 'Administrateur' }[p.role];
+  const role = { etudiant: 'Étudiant', enseignant: 'Conférencier', admin: 'Administrateur' }[p.role];
 
   const vue = html`<div class="page">
     ${enTete('Mon compte', p)}
