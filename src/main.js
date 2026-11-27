@@ -179,4 +179,12 @@ async function demarrer() {
   }
 }
 
-demarrer();
+demarrer().catch((e) => {
+  // Sans ce filet, une erreur au démarrage (clé ou adresse Supabase invalide…)
+  // laisse une page blanche.
+  console.error(e);
+  racine.innerHTML = String(html`<div class="page"><h1>L'app ne peut pas démarrer</h1>
+    <p class="erreur">${e.message}</p>
+    <p class="aide">Vérifiez VITE_SUPABASE_URL (de la forme https://xxxx.supabase.co) et VITE_SUPABASE_ANON_KEY dans les réglages de l'hébergement, puis relancez un déploiement.</p>
+    <button class="btn" onclick="location.reload()">Réessayer</button></div>`);
+});
