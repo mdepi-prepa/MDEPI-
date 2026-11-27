@@ -329,6 +329,8 @@ a.ligne-info .lien-accent { display: inline-flex; align-items: center; gap: 4px;
 
 /* Mode épreuve : plein écran, sans la barre de navigation. */
 body.mode-epreuve .nav { display: none; }
+body.mode-epreuve .page > .entete { display: none; }
+body.mode-epreuve #contenu > .page { max-width: 1100px; margin: 0 auto; padding: 0; }
 body.mode-epreuve .coquille { display: block; }
 body.mode-epreuve #contenu { padding-bottom: 24px; }
 body.mode-epreuve #contenu > .passage { max-width: 1100px; margin: 0 auto; }

@@ -12,7 +12,6 @@ import { points, formatNote, noteSur20, pointsPonderes, coefficient } from '../l
 import { serieDe, aPlat, lettre, htmlQcm, chargerImages, LIBELLES_TYPES, noterCopie, CATEGORIES, categorieDe } from '../lib/qcm.js';
 import { enTete, vide } from './commun.js';
 import { questionCorrigee, sommaireCopie } from './qcm-rendu.js';
-import { chrono } from './passage.js';
 
 const CLE_ONGLET = 'mdepi-entrainement-onglet';
 const lireOnglet = () => {
@@ -135,7 +134,6 @@ export async function vueRejouer(app, { id }) {
   // Conférence annuelle : mêmes conditions que l'épreuve (durée, questions
   // validées une à une sans correction, correction complète à la fin).
   const examen = categorieDe(s) === 'conference';
-  const duree = new Date(s.fin) - new Date(s.debut);
   // Questions ratées : dernière tentative d'entraînement, sinon la copie de l'épreuve.
   const derniere = tentatives.find((e) => e.serie_id === serieDe(s));
   const source = derniere?.reponses || copie?.reponses;
@@ -143,7 +141,6 @@ export async function vueRejouer(app, { id }) {
 
   const vue = html`<div class="page">
     ${enTete('Entraînement', null, '#/entrainement')}
-    <div class="chrono chrono-entrainement" data-chrono hidden title="Temps restant"></div>
     <div data-zone></div>
   </div>`;
 
@@ -154,38 +151,178 @@ export async function vueRejouer(app, { id }) {
     let reponses = {};
     let verifiee = false;
     let confirmerVide = false;
-    let minuteur = null;
-    const chronoEl = el.querySelector('[data-chrono]');
-    const arreterChrono = () => {
-      clearInterval(minuteur);
-      minuteur = null;
-      chronoEl.hidden = true;
+    // Conférences : même écran que l'épreuve (sommaire des questions,
+    // questions validées une à une, questions précédentes du dossier au-dessus),
+    // sans limite de temps.
+    let courant = 0;
+    const repE = (q) => reponses[q.id] || { question_id: q.id, choix: [], texte: '', validee: false };
+    const aRepondu = (q) => (q.type === 'QROC' ? !!repE(q).texte?.trim() : repE(q).choix?.length > 0);
+    const accessible = (k) => {
+      const q = questions[k];
+      const prec = questions[k - 1];
+      return !prec || prec.di !== q.di || repE(prec).validee;
     };
-    const lancerChrono = () => {
-      arreterChrono();
-      const limite = Date.now() + duree;
-      const tic = () => {
-        const reste = limite - Date.now();
-        chronoEl.textContent = 'Temps restant ' + chrono(reste);
-        chronoEl.classList.toggle('urgent', reste < 5 * 60000);
-        if (reste <= 0) {
-          app.message("Temps écoulé : l'épreuve est terminée.");
-          fin();
-        }
+    const quitterPassage = () => {
+      document.body.classList.remove('mode-epreuve');
+      
+    };
+    window.addEventListener('hashchange', quitterPassage, { once: true });
+
+    const demarrerPassage = () => {
+      document.body.classList.add('mode-epreuve');
+      
+      courant = 0;
+      zone.innerHTML = String(html`<div class="passage">
+        <header class="passage-haut">
+          <a class="btn-icone" href="#/entrainement" aria-label="Quitter l'entraînement">${icones.retour(20)}</a>
+          <div class="pile-mini passage-titre"><strong>${s.titre}</strong><span class="aide">Entraînement · sans limite de temps</span></div>
+          <a class="btn-icone" href="#/" aria-label="Revenir à l'accueil" title="Revenir à l'accueil">${icones.accueil(20)}</a>
+        </header>
+        <div class="passage-corps">
+          <nav class="passage-nav" aria-label="Questions" data-nav></nav>
+          <section class="passage-question" data-zone-q aria-live="polite"></section>
+        </div>
+        <div class="resume" data-resume hidden></div>
+      </div>`);
+      allerA(0);
+      window.scrollTo(0, 0);
+    };
+
+    const dessinerNavE = () => {
+      const nav = zone.querySelector('[data-nav]');
+      const dis = [...new Set(questions.map((q) => q.di))];
+      nav.innerHTML = String(html`${dis.map((di) => {
+        const items = questions.map((q, k) => ({ q, k })).filter((x) => x.q.di === di);
+        return html`<div class="nav-dossier">
+          <span class="nav-dossier-titre">${items[0].q.dossier.titre}</span>
+          <div class="nav-numeros">${items.map(({ q, k }) => {
+            const cls = [repE(q).validee ? 'validee' : aRepondu(q) ? 'repondue' : '', k === courant ? 'courante' : '', accessible(k) ? '' : 'verrouillee'].join(' ');
+            return html`<button class="num ${cls}" data-aller="${k}" ${accessible(k) ? '' : 'disabled'}
+              aria-label="Question ${q.num}${repE(q).validee ? ', validée' : aRepondu(q) ? ', répondue' : ''}">${q.num}</button>`;
+          })}</div>
+        </div>`;
+      })}
+      <button class="btn contour terminer" data-action="resume">Tout envoyer et terminer</button>`);
+    };
+
+    const dessinerQuestionE = () => {
+      confirmerVide = false;
+      const zq = zone.querySelector('[data-zone-q]');
+      const q = questions[courant];
+      const r = repE(q);
+      const fige = r.validee;
+      const suivante = questions[courant + 1];
+      const avant = questions.filter((x, k) => k < courant && x.di === q.di);
+      zq.innerHTML = String(html`
+        ${avant.length
+          ? html`<div class="q-precedentes">${avant.map((x) => {
+              const rx = repE(x);
+              return html`<article class="q-precedente">
+                <header class="q-bandeau"><span>Question ${x.num}</span><span>${rx.validee ? 'Validée' : LIBELLES_TYPES[x.type]}</span></header>
+                <div class="q-enonce">${brut(htmlQcm(x.enonce))}</div>
+                ${x.type === 'QROC'
+                  ? html`<p class="q-reponse-qroc"><span class="aide">Votre réponse : </span>${rx.texte || '(sans réponse)'}</p>`
+                  : html`<fieldset class="propositions" disabled><legend class="sr">Propositions</legend>${x.propositions.map(
+                      (p, k) => html`<label class="prop">
+                        <input type="${x.type === 'QRU' ? 'radio' : 'checkbox'}" ${(rx.choix || []).includes(p.id) ? 'checked' : ''}>
+                        <span class="lettre">${lettre(k)}</span><span class="prop-texte">${brut(htmlQcm(p.texte))}</span>
+                      </label>`
+                    )}</fieldset>`}
+              </article>`;
+            })}</div>`
+          : ''}
+        <p class="surtitre" data-q-courante>${q.dossier.titre} · question ${q.qi + 1} sur ${q.dossier.questions.length}</p>
+        ${q.qi > 0 && !avant.some((x) => x.qi === 0)
+          ? html`<details class="rappel"><summary>Relire l'énoncé du dossier</summary><div class="q-enonce">${brut(htmlQcm(q.dossier.questions[0].enonce))}</div></details>`
+          : ''}
+        <header class="q-bandeau"><span>Question ${q.num}</span><span>${LIBELLES_TYPES[q.type]}</span></header>
+        <div class="q-enonce">${brut(htmlQcm(q.enonce))}</div>
+        ${q.type === 'QRP' ? html`<p class="alerte">${q.nb_reponses} réponse${q.nb_reponses > 1 ? 's' : ''} attendue${q.nb_reponses > 1 ? 's' : ''} : vous ne pouvez pas cocher plus de ${q.nb_reponses} case${q.nb_reponses > 1 ? 's' : ''}.</p>` : ''}
+        ${q.type === 'QROC'
+          ? html`<label class="champ"><span>Votre réponse</span><input class="qroc" data-qroc maxlength="500" autocomplete="off" value="${r.texte || ''}" ${fige ? 'disabled' : ''}></label>`
+          : html`<fieldset class="propositions" ${fige ? 'disabled' : ''}><legend class="sr">Propositions</legend>${q.propositions.map(
+              (p, k) => html`<label class="prop">
+                <input type="${q.type === 'QRU' ? 'radio' : 'checkbox'}" name="p" value="${p.id}" ${(r.choix || []).includes(p.id) ? 'checked' : ''}>
+                <span class="lettre">${lettre(k)}</span><span class="prop-texte">${brut(htmlQcm(p.texte))}</span>
+              </label>`
+            )}</fieldset>`}
+        ${fige ? html`<p class="alerte vert">Question validée : votre réponse n'est plus modifiable.</p>` : ''}
+        <p class="alerte attention" data-vide hidden>Vous n'avez rien répondu. Cliquez à nouveau pour valider sans réponse.</p>
+        <div class="actions passage-actions">
+          <button class="btn contour" data-aller="${courant - 1}" ${courant > 0 && accessible(courant - 1) ? '' : 'disabled'}>Précédente</button>
+          ${fige
+            ? suivante
+              ? html`<button class="btn plein" data-aller="${courant + 1}" ${accessible(courant + 1) ? '' : 'disabled'}>Suivante</button>`
+              : html`<button class="btn plein" data-action="resume">Terminer</button>`
+            : html`<button class="btn plein" data-action="valider">${suivante && suivante.di === q.di ? 'Valider et passer à la suite' : 'Valider la question'}</button>`}
+        </div>`);
+      chargerImages(zq, app.api);
+    };
+
+    const allerA = (k) => {
+      if (k < 0 || k >= questions.length || !accessible(k)) return;
+      courant = k;
+      dessinerNavE();
+      dessinerQuestionE();
+      (zone.querySelector('[data-q-courante]') || zone).scrollIntoView({ block: 'start', behavior: 'smooth' });
+    };
+
+    // Garde les cases cochées (non validées) quand on change de question.
+    const lireE = () => {
+      const q = questions[courant];
+      if (!q || repE(q).validee) return;
+      const champ = zone.querySelector('[data-zone-q] [data-qroc]');
+      reponses[q.id] = {
+        ...repE(q),
+        choix: [...zone.querySelectorAll('[data-zone-q] input[name=p]:checked')].map((x) => x.value),
+        texte: champ ? champ.value : '',
       };
-      chronoEl.hidden = false;
-      tic();
-      minuteur = setInterval(tic, 1000);
     };
-    // Quitter la page arrête le chrono.
-    window.addEventListener('hashchange', arreterChrono, { once: true });
+
+    const validerE = () => {
+      lireE();
+      const q = questions[courant];
+      if (!aRepondu(q) && !confirmerVide) {
+        confirmerVide = true;
+        zone.querySelector('[data-vide]').hidden = false;
+        return;
+      }
+      reponses[q.id] = { ...repE(q), validee: true };
+      const suivante = questions.findIndex((x, k) => k > courant && !repE(x).validee && accessible(k));
+      if (suivante >= 0) allerA(suivante);
+      else {
+        dessinerNavE();
+        dessinerQuestionE();
+        if (questions.every((x) => repE(x).validee)) montrerResumeE();
+      }
+    };
+
+    const montrerResumeE = () => {
+      lireE();
+      const resume = zone.querySelector('[data-resume]');
+      const n = (f) => questions.filter(f).length;
+      const etat = (q) => (repE(q).validee ? 'Validée' : aRepondu(q) ? 'Répondue (non validée)' : 'Sans réponse');
+      resume.innerHTML = String(html`<div class="resume-boite carte pile" role="dialog" aria-modal="true" aria-labelledby="titre-resume">
+        <h2 id="titre-resume" class="titre-section">Résumé de la tentative</h2>
+        <p>${n((q) => repE(q).validee)} validée(s) · ${n((q) => !repE(q).validee && aRepondu(q))} répondue(s) sans validation · ${n((q) => !aRepondu(q))} sans réponse, sur ${questions.length}.</p>
+        <div class="tableau-defile"><table class="tableau"><thead><tr><th>Question</th><th>Dossier</th><th>État</th></tr></thead>
+          <tbody>${questions.map((q) => html`<tr class="${aRepondu(q) ? '' : 'sans-reponse'}"><td>${q.num}</td><td>${q.dossier.titre}</td><td>${etat(q)}</td></tr>`)}</tbody></table></div>
+        <p class="aide">Les réponses non validées comptent telles quelles.</p>
+        <div class="actions">
+          <button class="btn contour" data-action="retour">Retour à la tentative</button>
+          <button class="btn plein" data-action="envoyer">Terminer et voir ma correction</button>
+        </div>
+      </div>`);
+      resume.hidden = false;
+      resume.querySelector('[data-action=retour]').focus();
+    };
 
     const accueil = () => {
       zone.innerHTML = String(html`<section class="carte pile">
         <h2 class="titre-seance">${s.titre}</h2>
         <p>${toutes.length} questions en ${qcm.length} dossier${qcm.length > 1 ? 's' : ''}.
           ${examen
-            ? `Mêmes conditions que l'épreuve : ${chrono(duree)}, chaque question validée avant de passer à la suite, correction complète à la fin.`
+            ? "Même écran que l'épreuve, sans limite de temps : chaque question validée avant de passer à la suite, correction complète à la fin."
             : 'Correction après chaque question, sans limite de temps.'}</p>
         <div class="actions">
           <button class="btn plein" data-depart="tout">Rejouer toute l'épreuve</button>
@@ -238,16 +375,6 @@ export async function vueRejouer(app, { id }) {
       };
       return reponses[q.id];
     };
-    const valider = () => {
-      const r = lire();
-      if (!r.choix.length && !r.texte.trim() && !confirmerVide) {
-        confirmerVide = true;
-        zone.querySelector('[data-vide]').hidden = false;
-        return;
-      }
-      if (++i < questions.length) dessiner();
-      else fin();
-    };
     const verifier = () => {
       const q = questions[i];
       lire();
@@ -261,7 +388,7 @@ export async function vueRejouer(app, { id }) {
 
     const fin = async () => {
       if (!questions.length) return;
-      arreterChrono();
+      quitterPassage();
       const { points: pts, total, note20: note } = noterCopie(questions, corrections, reponses);
       // Questions jouées regroupées par dossier (pour le sommaire).
       const dossiers = [];
@@ -305,23 +432,30 @@ export async function vueRejouer(app, { id }) {
 
     // QRP : pas plus de n cases.
     el.addEventListener('change', (e) => {
-      const q = questions[i];
+      const q = examen ? questions[courant] : questions[i];
       if (e.target.name === 'p' && q?.type === 'QRP' && e.target.checked && zone.querySelectorAll('input[name=p]:checked').length > (q.nb_reponses || 99)) {
         e.target.checked = false;
         app.message(`${q.nb_reponses} réponses attendues : décochez une case avant d'en cocher une autre.`, 'erreur');
       }
     });
     el.addEventListener('click', (e) => {
-      const b = e.target.closest('[data-depart],[data-action]');
+      if (e.target.matches('[data-resume]')) e.target.hidden = true;
+      const b = e.target.closest('[data-depart],[data-action],[data-aller]');
       if (!b) return;
       if (b.dataset.depart) {
         questions = b.dataset.depart === 'ratees' ? ratees : toutes;
         i = 0;
         reponses = {};
-        if (examen && b.dataset.depart === 'tout') lancerChrono();
-        else arreterChrono();
-        dessiner();
-      } else if (b.dataset.action === 'valider') valider();
+        if (examen) demarrerPassage();
+        else dessiner();
+      } else if (b.dataset.aller !== undefined) {
+        if (b.disabled) return;
+        lireE();
+        allerA(Number(b.dataset.aller));
+      } else if (b.dataset.action === 'valider') validerE();
+      else if (b.dataset.action === 'resume') montrerResumeE();
+      else if (b.dataset.action === 'retour') zone.querySelector('[data-resume]').hidden = true;
+      else if (b.dataset.action === 'envoyer') fin();
       else if (b.dataset.action === 'verifier' && !verifiee) verifier();
       else if (b.dataset.action === 'suivante') {
         if (++i < questions.length) dessiner();
