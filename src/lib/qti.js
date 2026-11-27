@@ -164,19 +164,22 @@ export async function parsePackage(files){
   }else{questions.push(parseItem2(doc.documentElement,ctx,ver));if(ctx.escaped)escaped=true}
  }
  /* dossiers progressifs : ordre et énoncé commun pris dans le fichier pool / test */
+ const ranges=[];
  for(const t of tests){
   const base=h=>h.split('/').pop().replace(/\.xml$/i,'');
   const found=t.refs.map(r=>questions.find(q=>q.id===r.id||q.id===base(r.href)));
   const miss=t.refs.filter((r,i)=>!found[i]);
-  const m=t.titre.match(/\b(D[1-4])\b/);const mat=t.titre.replace(/\(.*?\)/g,'').replace(/\b(CONF|D[1-4]|DP\s*\d+)\b/gi,'').trim();
+  const m=t.titre.match(/\b(D[1-4])\b/);const mat=t.titre.replace(/\(.*?\)/g,'').replace(/\b(CONF|D[1-4]|DP\s*\d+|KFP\s*\d+)\b/gi,'').trim();
   info(`Dossier « ${t.titre} » : ${t.refs.length} questions${t.lineaire?' dans un ordre imposé':''}${m?`, promo ${m[1]} lue dans le titre`:''}`);
   if(miss.length)err(`Questions du dossier absentes des fichiers déposés : ${miss.map(r=>r.href||r.id).join(', ')}`);
   const got=found.filter(Boolean);
   got.forEach((q,i)=>{const r=t.refs[found.indexOf(q)];if(r?.poids)q.coefficient=r.poids;q.dossier={titre:t.titre,rang:i+1,total:got.length,promo:m?m[1]:null,matiere:mat||null};if(mat)q.meta.matiere=mat});
-  const rest=questions.filter(q=>!got.includes(q));questions.splice(0,questions.length,...got,...rest);
+  ranges.push(...got);
   /* énoncé commun = début de la 1re question, avant « Q1 : » */
   if(got[0]&&got[0].enonce){const k=got[0].enonce.search(/Q1\s*:/);if(k>40){const box=document.createElement('div');box.innerHTML=got[0].enonce;const tx=box.textContent;const cut=tx.search(/Q1\s*:/);got.forEach(q=>q.dossier.contexte=tx.slice(0,cut).trim())}}
  }
+ /* dossiers dans l'ordre des fichiers pool, puis questions isolées */
+ if(ranges.length){const rest=questions.filter(q=>!ranges.includes(q));questions.splice(0,questions.length,...ranges,...rest)}
  if(escaped)info('Énoncés et propositions en HTML échappé avec styles Word (police, taille) : convertis, mise en forme d\'origine retirée, gras et couleurs gardés');
  if(questions.some(q=>q.propositions.some(p=>p.explication)))info(`Correction découpée proposition par proposition pour ${questions.filter(q=>q.propositions.some(p=>p.explication)).length} question(s)`);
  for(const k in notes){const n=notes[k];msgs.push({k:k==='nofb'?'w':'i',m:n.items.size?`${n.head} : ${[...n.items].join(', ')}`:n.head})}
