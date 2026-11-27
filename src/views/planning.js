@@ -7,7 +7,11 @@ import { enTete, ligneSeance, vide } from './commun.js';
 export async function vuePlanning(app, { onglet = 'avenir' } = {}) {
   const seances = await app.api.seances();
   const maintenant = new Date();
-  const aVenir = seances.filter((s) => new Date(s.fin) > maintenant);
+  // Une séance du jour (épreuve en cours ou juste finie comprise) reste dans
+  // « À venir » jusqu'à minuit.
+  const minuit = new Date(maintenant);
+  minuit.setHours(0, 0, 0, 0);
+  const aVenir = seances.filter((s) => new Date(s.fin) > minuit);
   const replays = seances.filter((s) => new Date(s.fin) <= maintenant && s.replay_url).reverse();
 
   const selecteur = html`<div class="segments" role="tablist">
