@@ -3,7 +3,7 @@
 // commentaire de correction. Sert à l'étudiant (sa copie), à l'équipe
 // (sujet corrigé, copie d'un étudiant) et à l'impression (sauvegarde PDF).
 import { html, brut } from '../lib/html.js';
-import { points, verdict, formatNote, fatale, pointsPonderes, nbAttendues } from '../lib/bareme.js';
+import { points, verdict, formatNote, fatale, pointsPonderes, nbAttendues, coefficient } from '../lib/bareme.js';
 import { lettre, htmlQcm, LIBELLES_TYPES } from '../lib/qcm.js';
 import { corrigerQroc } from '../lib/qroc.js';
 
@@ -84,15 +84,31 @@ export function questionCorrigee(q, num, correction, reponse, avecCopie, editabl
   </article>`;
 }
 
-// Tout le QCM corrigé, dossier par dossier.
+// Sommaire d'une copie corrigée : un lien par dossier, avec la note du dossier.
+function sommaireCopie(qcm, corrections, reponses) {
+  return html`<nav class="carte sommaire no-print" aria-label="Sommaire des dossiers">
+    <h2 class="titre-section">Sommaire</h2>
+    <ol class="sommaire-liste">${qcm.map((d, i) => {
+      const max = d.questions.reduce((t, q) => t + coefficient(q), 0);
+      const obtenus = d.questions.reduce((t, q) => t + pointsPonderes(q, corrections[q.id], reponses[q.id]), 0);
+      const ratio = max ? obtenus / max : 0;
+      return html`<li><a href="#dossier-${i + 1}" data-ancre="dossier-${i + 1}">
+        <span class="sommaire-titre">${d.titre}</span>
+        <span class="sommaire-note ${ratio >= 0.7 ? 'bien' : ratio >= 0.4 ? 'moyen' : 'faible'}">${formatNote(Math.round(obtenus * 100) / 100)} / ${formatNote(max)}</span>
+      </a></li>`;
+    })}</ol>
+  </nav>`;
+}
+
+// Tout le QCM corrigé, dossier par dossier (avec un sommaire pour une copie).
 export function qcmCorrige(qcm, corrections, reponses, editable = false) {
   const avecCopie = !!reponses;
-  return qcm.map(
-    (d) => html`<section class="dossier-corr">
+  return html`${avecCopie && qcm.length ? sommaireCopie(qcm, corrections, reponses) : ''}${qcm.map(
+    (d, n) => html`<section class="dossier-corr" id="dossier-${n + 1}">
       <h2 class="titre-dossier">${d.titre}</h2>
       ${d.questions.map((q, i) => html`${editable ? reglagesQuestion(q, corrections[q.id]) : ''}${questionCorrigee(q, i + 1, corrections[q.id], reponses?.[q.id], avecCopie, editable)}`)}
     </section>`
-  );
+  )}`;
 }
 
 // Back-office : type (QRM / QRP), réponses attendues, pondération, statut.

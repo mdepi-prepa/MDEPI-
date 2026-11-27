@@ -466,9 +466,6 @@ async function passage(app, s, copie) {
   return { html: vue, monter, titre: s.titre };
 }
 
-const BAREME =
-  'Barème (comme Théia) : QRM 1 point sans erreur, 0,5 avec une erreur, 0,2 avec deux, 0 sans réponse ; QRU 1 point ; QRP bonnes réponses cochées ÷ réponses attendues ; QROC 1 point, ou 0,5 si la réponse est jugée acceptable. Une proposition indispensable oubliée ou inacceptable cochée met 0 à la question. Chaque question compte pour sa pondération.';
-
 // Copie corrigée de l'étudiant.
 export async function vueMaCorrection(app, { id }) {
   const s = await app.api.seance(id);
@@ -482,7 +479,6 @@ export async function vueMaCorrection(app, { id }) {
       <h2 class="titre-seance">${s.titre}</h2>
       <p class="aide">${dateLongue(s.debut)} · copie ${copie?.rendue_le ? `envoyée à ${heure(copie.rendue_le)}` : 'non envoyée'}</p>
       ${resultat ? bandeauNote(resultat) : html`<p class="aide">${messageAttente(s, infos)}</p>`}
-      <p class="aide">${BAREME}</p>
       <button class="btn contour no-print" onclick="window.print()">${icones.fichier(16)} Imprimer ou enregistrer en PDF</button>
     </section>
     <div class="legende"><span class="v-juste">Juste</span><span class="v-fausse">Fausse (cochée à tort)</span><span class="v-oubliee">Oubliée</span></div>

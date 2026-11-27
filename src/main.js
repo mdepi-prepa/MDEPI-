@@ -174,6 +174,13 @@ async function demarrer() {
     else afficher();
   });
   window.addEventListener('hashchange', afficher);
+  // Liens internes à une page (sommaire d'une copie) : défilement sans changer d'écran.
+  document.addEventListener('click', (e) => {
+    const lien = e.target.closest('[data-ancre]');
+    if (!lien) return;
+    e.preventDefault();
+    document.getElementById(lien.dataset.ancre)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
   afficher();
 
   // Fonctionnement hors connexion et installation (voir public/sw.js).
