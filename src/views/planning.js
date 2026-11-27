@@ -18,8 +18,8 @@ export async function vuePlanning(app, { onglet = 'avenir' } = {}) {
   const docs = onglet === 'replays'
     ? await Promise.all(passees.map((s) => app.api.documents(s.id).catch(() => [])))
     : [];
-  // Support et diapos de correction : les deux servent de support après la séance.
-  const supportsDe = new Map(passees.map((s, i) => [s.id, (docs[i] || []).filter((d) => d.type === 'support' || d.type === 'correction')]));
+  // Tous les PDF de la séance (support, diapos de correction, sujet) servent de support une fois la séance passée.
+  const supportsDe = new Map(passees.map((s, i) => [s.id, docs[i] || []]));
 
   const selecteur = html`<div class="segments" role="tablist">
     <a role="tab" href="#/planning" class="segment${onglet === 'avenir' ? ' actif' : ''}" aria-selected="${onglet === 'avenir'}">À venir</a>

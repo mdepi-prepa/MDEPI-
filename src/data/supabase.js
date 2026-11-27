@@ -318,8 +318,13 @@ export function creerBackendSupabase(url, cleAnon) {
       );
     },
     async supprimerDocument(doc) {
-      verifier(await sb.storage.from('documents').remove([doc.chemin]));
-      verifier(await sb.from('documents').delete().eq('id', doc.id));
+      if (!doc) throw new Error('Document introuvable : rechargez la page.');
+      // La ligne d'abord (c'est elle que l'app affiche), puis le fichier.
+      const r = await sb.from('documents').delete().eq('id', doc.id).select('id');
+      verifier(r);
+      if (!r.data?.length) throw new Error("Le document n'a pas pu être retiré (droits insuffisants ?).");
+      const { error } = await sb.storage.from('documents').remove([doc.chemin]);
+      if (error) console.warn('Fichier non supprimé du stockage :', error.message);
     },
     async publierAnnonce(texte, promos) {
       return verifier(await sb.from('annonces').insert({ texte, promos }).select().single());

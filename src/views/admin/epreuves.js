@@ -36,13 +36,12 @@ export async function vueAdminEpreuves(app) {
       </tr>`
     )}</tbody></table></div>`;
 
-  // Nombre de documents (sujet, correction) par épreuve.
+  // Nombre de supports PDF par épreuve.
   await Promise.all(
     epreuves.map(async (s) => {
       const [docs, infos] = await Promise.all([app.api.documents(s.id).catch(() => []), app.api.infosQcm(s.id).catch(() => null)]);
       s._qcm = infos?.questions || 0;
-      const n = (t) => docs.filter((d) => d.type === t).length;
-      s._docs = [n('sujet') && 'Sujet', n('correction') && 'Correction'].filter(Boolean).join(' + ') || '–';
+      s._docs = docs.length ? `${docs.length} support${docs.length > 1 ? 's' : ''}` : '–';
     })
   );
 

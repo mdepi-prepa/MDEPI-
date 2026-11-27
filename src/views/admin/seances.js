@@ -139,17 +139,17 @@ export async function vueAdminSeance(app, { id, copie, epreuve }) {
     ${nouvelle
       ? html`<p class="aide">Enregistrez la séance pour pouvoir y déposer les supports et les diapos de correction.</p>`
       : html`<section class="carte pile">
-          <h2 class="titre-section">${s.epreuve ? 'Sujet et correction (PDF)' : 'Supports et diapos de correction (PDF)'}</h2>
+          <h2 class="titre-section">Supports (PDF)</h2>
           ${docs.length
             ? html`<div class="liste">${docs.map(
-                (d) => html`<div class="ligne-info"><span>${{ support: 'Support', correction: 'Correction', sujet: 'Sujet' }[d.type]} · ${d.titre}</span>
+                (d) => html`<div class="ligne-info"><span>${d.titre}</span>
                   <button class="btn lien rouge" data-suppr-doc="${d.id}">Retirer</button></div>`
               )}</div>`
             : html`<p class="aide">Aucun document.</p>`}
           <form id="f-doc" class="grille-2">
-            <label class="champ"><span>Type</span><select name="type">${s.epreuve ? html`<option value="sujet">Sujet</option>` : ''}<option value="support">Support</option><option value="correction">${s.epreuve ? 'Correction' : 'Diapos de correction'}</option></select></label>
+            <input type="hidden" name="type" value="support">
             <label class="champ"><span>Fichier PDF</span><input type="file" name="fichier" accept="application/pdf" required></label>
-            ${s.epreuve ? html`<p class="aide">Les étudiants voient le sujet dès le début de leur épreuve et la correction seulement après sa fin.</p>` : ''}
+            ${s.epreuve ? html`<p class="aide">Les étudiants voient le support à la fin de leur épreuve.</p>` : ''}
             <button class="btn contour" type="submit">Déposer</button>
           </form>
         </section>`}
@@ -243,8 +243,18 @@ export async function vueAdminSeance(app, { id, copie, epreuve }) {
       }
       const idDoc = e.target.closest('[data-suppr-doc]')?.dataset.supprDoc;
       if (idDoc && confirm('Retirer ce document ?')) {
-        await app.api.supprimerDocument(docs.find((x) => x.id === idDoc));
-        app.rafraichir();
+        const bouton = e.target.closest('[data-suppr-doc]');
+        bouton.disabled = true;
+        const y = window.scrollY;
+        try {
+          await app.api.supprimerDocument(docs.find((x) => x.id === idDoc));
+          app.message('Document retiré.');
+          await app.rafraichir();
+          window.scrollTo(0, y); // rester au même endroit de la page
+        } catch (err) {
+          bouton.disabled = false;
+          app.message(err.message, 'erreur');
+        }
       }
     });
 

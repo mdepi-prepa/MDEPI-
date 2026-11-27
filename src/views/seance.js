@@ -16,9 +16,6 @@ export async function vueSeance(app, { id }) {
     : [null, null];
   const enLigne = infos?.questions > 0;
   const passee = new Date(s.fin) <= new Date();
-  const supports = docs.filter((d) => d.type === 'support');
-  const corrections = docs.filter((d) => d.type === 'correction');
-  const sujets = docs.filter((d) => d.type === 'sujet');
 
   const listeDocs = (titre, liste) =>
     liste.length
@@ -45,13 +42,11 @@ export async function vueSeance(app, { id }) {
         ? html`<a class="btn plein" href="${urlSure(s.replay_url)}" target="_blank" rel="noopener">${icones.lecture(16)} Regarder le replay${s.replay_duree_min ? ` (${duree(s.replay_duree_min)})` : ''}</a>`
         : ''}
       ${passee && !s.replay_url && !s.annulee && !s.epreuve ? html`<p class="aide">Le replay sera ajouté ici dès qu'il sera disponible.</p>` : ''}
-      ${passee && s.epreuve && !docs.length && !enLigne ? html`<p class="aide">Le sujet et la correction seront ajoutés ici après l'épreuve.</p>` : ''}
-      ${s.epreuve && !passee && !s.annulee && !equipe ? html`<p class="aide">Le support et la correction apparaîtront ici à la fin de l'épreuve.</p>` : ''}
+      ${passee && s.epreuve && !docs.length && !enLigne ? html`<p class="aide">Le support sera ajouté ici après l'épreuve.</p>` : ''}
+      ${s.epreuve && !passee && !s.annulee && !equipe ? html`<p class="aide">Le support apparaîtra ici à la fin de l'épreuve.</p>` : ''}
     </section>
     ${enLigne && !s.annulee ? blocEpreuve(s, infos, copie, equipe) : ''}
-    ${listeDocs('Sujet', sujets)}
-    ${listeDocs('Supports', supports)}
-    ${listeDocs(s.epreuve ? 'Correction' : 'Diapos de correction', corrections)}
+    ${listeDocs('Supports', docs)}
   </div>`;
 
   function monter(el) {
