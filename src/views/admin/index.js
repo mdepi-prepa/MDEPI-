@@ -22,10 +22,11 @@ export async function vueAdmin(app) {
       ${enteteAdmin('Back-office', '#/accueil')}
       <div class="grille-admin">
         ${tuile('#/admin/seances', icones.planning(18), 'Planning et replays', 'Créer, modifier ou annuler une séance, rattacher le replay Zoom, déposer les PDF.')}
+        ${tuile('#/admin/epreuves', icones.epreuve(18), 'Épreuves', 'CCB et examens blancs, groupe par groupe : dates, lieux, sujets et corrections.')}
         ${admin ? tuile('#/admin/comptes', icones.reglages(18), 'Comptes', 'Importer les inscrits (CSV), promos, groupes de rotation, passage d’année.') : ''}
         ${admin ? tuile('#/admin/annonces', icones.cloche(18), 'Annonces', 'Publier une annonce pour une ou plusieurs promos.') : ''}
       </div>
-      <p class="aide">Import des QCM Théia, cartes et épreuves : lot 1.1.</p>
+      <p class="aide">Import des QCM Théia, cartes, passage et correction des épreuves dans l'app : lot 1.1.</p>
     </div>`,
   };
 }

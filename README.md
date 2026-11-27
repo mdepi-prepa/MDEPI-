@@ -1,7 +1,7 @@
 # App MDEPi
 
 Web app installable (PWA) des étudiants de la MDEPi, prépa EDN à Marseille.
-Lot 1 (socle V1.0) : comptes, promos et groupes de rotation, Accueil, Planning (à venir et replays), annonces, back-office, installation sur le téléphone.
+Lot 1 (socle V1.0) : comptes, promos et groupes de rotation, Accueil, Planning (à venir et replays), Épreuves par groupe, annonces, back-office, installation sur le téléphone.
 
 Services : **Supabase** (base de données, connexion, fichiers), **Brevo** (envoi des e-mails de connexion, service français) et **Cloudflare Pages** (hébergement).
 
@@ -101,6 +101,7 @@ GitHub Pages n'est pas conseillé ici : pour un dépôt privé, il demande un ab
 | Replay Zoom | Dans la séance : coller le lien de partage de l'enregistrement Zoom (*Zoom › Enregistrements › Partager*) et sa durée |
 | Supports, diapos de correction | Dans la séance : déposer le PDF (50 Mo maximum) |
 | Annonce | Back-office › Annonces |
+| Épreuves (CCB, examens blancs) | Back-office › Épreuves. Une épreuve par groupe et par date ; « Dupliquer » pour la reposer à un autre groupe. Sujet et correction en PDF dans l'épreuve. Les étudiants les voient dans l'onglet Épreuves |
 
 Rôles : **admin** (tout), **enseignant** (planning, replays, documents), **étudiant**. Un étudiant ne voit que les séances de sa promo et de son groupe (une séance sans groupe coché concerne toute la promo), et les annonces de sa promo.
 
@@ -113,8 +114,8 @@ index.html                 page unique de l'app
 src/main.js                démarrage, navigation (#/accueil, #/planning…), menu
 src/styles.css             toute la mise en forme (couleurs de la charte en haut)
 src/views/                 un fichier par écran
-  accueil.js planning.js seance.js annonces.js profil.js connexion.js bientot.js
-  admin/                   back-office : comptes.js seances.js annonces.js
+  accueil.js planning.js epreuves.js seance.js annonces.js profil.js connexion.js bientot.js
+  admin/                   back-office : comptes.js seances.js epreuves.js annonces.js
 src/data/supabase.js       lecture/écriture dans Supabase
 src/data/demo.js           mêmes fonctions avec des données fictives (mode démo)
 src/lib/                   outils : dates (heure de Paris), CSV, .ics, règles d'accès, icônes

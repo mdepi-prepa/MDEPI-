@@ -20,7 +20,7 @@ export async function vueAdminSeances(app) {
               <td>${dateCourte(s.debut)}<br><span class="aide">${plageHoraire(s.debut, s.fin)}</span></td>
               <td><a href="#/admin/seances/${s.id}"><strong>${s.titre}</strong></a><br><span class="aide">${s.lieu}</span></td>
               <td>${s.promos.join(', ')}${s.groupes.length ? html`<br><span class="aide">${s.groupes.length} groupe(s)</span>` : ''}</td>
-              <td><div class="etiquettes">${etiquettes(s)}${new Date(s.fin) <= maintenant ? (s.replay_url ? html`<span class="etiquette">Replay</span>` : html`<span class="etiquette modifiee">Sans replay</span>`) : ''}</div></td>
+              <td><div class="etiquettes">${etiquettes(s)}${new Date(s.fin) <= maintenant && !s.epreuve ? (s.replay_url ? html`<span class="etiquette">Replay</span>` : html`<span class="etiquette modifiee">Sans replay</span>`) : ''}</div></td>
             </tr>`
           )}</tbody></table></div>`
       : vide('Aucune séance.');
@@ -55,19 +55,28 @@ const VIDE = {
   modifiee_le: null,
 };
 
-export async function vueAdminSeance(app, { id }) {
+// id : identifiant, ou « nouvelle ». copie : séance à dupliquer (même
+// contenu, à poser sur une autre date ou un autre groupe). epreuve : nouvelle épreuve.
+export async function vueAdminSeance(app, { id, copie, epreuve }) {
   const nouvelle = id === 'nouvelle';
-  const s = nouvelle ? { ...VIDE } : await app.api.seance(id);
+  let s;
+  if (copie) {
+    const source = await app.api.seance(copie);
+    s = source && { ...VIDE, ...source, id: undefined, annulee: false, modifiee_le: null, replay_url: '', replay_duree_min: null };
+  } else s = nouvelle ? { ...VIDE, epreuve: !!epreuve } : await app.api.seance(id);
   if (!s) return { html: html`<div class="page">${enteteAdmin('Séance introuvable', '#/admin/seances')}</div>` };
+  const retour = s.epreuve ? '#/admin/epreuves' : '#/admin/seances';
+  const nom = s.epreuve ? 'épreuve' : 'séance';
   const [groupes, docs] = await Promise.all([app.api.groupes(), nouvelle ? [] : app.api.documents(id)]);
   const deb = s.debut ? versChampsDate(s.debut) : { date: '', heure: '18:30' };
   const fin = s.fin ? versChampsDate(s.fin) : { heure: '21:30' };
   const lieuAutre = s.lieu && !LIEUX.includes(s.lieu);
 
   const vue = html`<div class="page">
-    ${enteteAdmin(nouvelle ? 'Nouvelle séance' : 'Modifier la séance', '#/admin/seances')}
+    ${enteteAdmin(copie ? (s.epreuve ? "Dupliquer l'épreuve" : 'Dupliquer la séance') : nouvelle ? (s.epreuve ? 'Nouvelle épreuve' : 'Nouvelle séance') : `Modifier la ${nom}`, retour)}
+    ${copie ? html`<p class="aide">Copie de « ${s.titre} ». Changez la date et le groupe, puis enregistrez.</p>` : ''}
     <form class="carte pile" id="f-seance">
-      <label class="champ"><span>Titre</span><input name="titre" required value="${s.titre}" placeholder="Cardiologie : syndromes coronariens aigus"></label>
+      <label class="champ"><span>Titre</span><input name="titre" required value="${s.titre}" placeholder="${s.epreuve ? 'CCB n°3 · examen blanc' : 'Cardiologie : syndromes coronariens aigus'}"></label>
       <label class="champ"><span>Matière</span><input name="matiere" value="${s.matiere}" placeholder="Cardiologie"></label>
       <div class="grille-3">
         <label class="champ"><span>Date</span><input type="date" name="date" required value="${deb.date}"></label>
@@ -101,22 +110,23 @@ export async function vueAdminSeance(app, { id }) {
       <p class="erreur" role="alert" hidden></p>
       <div class="actions">
         <button class="btn plein" type="submit">Enregistrer</button>
-        ${nouvelle ? '' : html`<button class="btn lien rouge" type="button" data-action="supprimer">Supprimer la séance</button>`}
+        ${nouvelle ? '' : html`<a class="btn contour" href="#/admin/seances/copie/${s.id}">Dupliquer pour un autre groupe</a>`}
+        ${nouvelle ? '' : html`<button class="btn lien rouge" type="button" data-action="supprimer">Supprimer la ${nom}</button>`}
       </div>
     </form>
 
     ${nouvelle
       ? html`<p class="aide">Enregistrez la séance pour pouvoir y déposer les supports et les diapos de correction.</p>`
       : html`<section class="carte pile">
-          <h2 class="titre-section">Supports et diapos de correction (PDF)</h2>
+          <h2 class="titre-section">${s.epreuve ? 'Sujet et correction (PDF)' : 'Supports et diapos de correction (PDF)'}</h2>
           ${docs.length
             ? html`<div class="liste">${docs.map(
-                (d) => html`<div class="ligne-info"><span>${d.type === 'support' ? 'Support' : 'Correction'} · ${d.titre}</span>
+                (d) => html`<div class="ligne-info"><span>${{ support: 'Support', correction: 'Correction', sujet: 'Sujet' }[d.type]} · ${d.titre}</span>
                   <button class="btn lien rouge" data-suppr-doc="${d.id}">Retirer</button></div>`
               )}</div>`
             : html`<p class="aide">Aucun document.</p>`}
           <form id="f-doc" class="grille-2">
-            <label class="champ"><span>Type</span><select name="type"><option value="support">Support</option><option value="correction">Diapos de correction</option></select></label>
+            <label class="champ"><span>Type</span><select name="type">${s.epreuve ? html`<option value="sujet">Sujet</option>` : ''}<option value="support">Support</option><option value="correction">${s.epreuve ? 'Correction' : 'Diapos de correction'}</option></select></label>
             <label class="champ"><span>Fichier PDF</span><input type="file" name="fichier" accept="application/pdf" required></label>
             <button class="btn contour" type="submit">Déposer</button>
           </form>
@@ -168,8 +178,8 @@ export async function vueAdminSeance(app, { id }) {
       }
       try {
         const enreg = await app.api.enregistrerSeance(donnees);
-        app.message('Séance enregistrée.');
-        app.naviguer(nouvelle ? `admin/seances/${enreg.id}` : 'admin/seances');
+        app.message(s.epreuve ? 'Épreuve enregistrée.' : 'Séance enregistrée.');
+        app.naviguer(nouvelle ? `admin/seances/${enreg.id}` : retour.slice(2));
       } catch (err) {
         erreur.textContent = err.message;
         erreur.hidden = false;
@@ -177,10 +187,10 @@ export async function vueAdminSeance(app, { id }) {
     });
 
     el.addEventListener('click', async (e) => {
-      if (e.target.closest('[data-action=supprimer]') && confirm('Supprimer définitivement cette séance et ses documents ?')) {
+      if (e.target.closest('[data-action=supprimer]') && confirm(`Supprimer définitivement cette ${nom} et ses documents ?`)) {
         for (const doc of docs) await app.api.supprimerDocument(doc);
         await app.api.supprimerSeance(s.id);
-        app.naviguer('admin/seances');
+        app.naviguer(retour.slice(2));
       }
       const idDoc = e.target.closest('[data-suppr-doc]')?.dataset.supprDoc;
       if (idDoc && confirm('Retirer ce document ?')) {

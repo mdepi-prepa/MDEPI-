@@ -69,7 +69,7 @@ create index if not exists seances_debut_idx on public.seances (debut);
 create table if not exists public.documents (
   id uuid primary key default gen_random_uuid(),
   seance_id uuid not null references public.seances(id) on delete cascade,
-  type text not null check (type in ('support','correction')),
+  type text not null check (type in ('support','correction','sujet')),  -- sujet : sujet d'épreuve
   titre text not null,
   chemin text not null unique,              -- chemin dans le bucket « documents »
   created_at timestamptz not null default now()

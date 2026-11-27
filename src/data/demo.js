@@ -3,7 +3,7 @@
 // (préview, développement). Code de connexion : 123456.
 import { peutVoirSeance, peutVoirAnnonce, estAdmin, estEquipe } from '../lib/acces.js';
 
-const CLE = 'mdepi-demo-v1';
+const CLE = 'mdepi-demo-v2';
 export const CODE_DEMO = '123456';
 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2));
@@ -61,7 +61,9 @@ function donneesInitiales() {
     s('Gastro-entérologie : hémorragies digestives', 'Gastro-entérologie', jour(11, 18, 30), jour(11, 21, 30), '94 rue Sainte-Cécile', {
       groupes: [gB],
     }),
-    s('CCB n°3 · examen blanc', 'Toutes matières', jour(15, 9), jour(15, 12), '106 rue Sainte-Cécile', { epreuve: true, zoom_url: null }),
+    s('CCB n°3 · examen blanc', 'Toutes matières', jour(15, 9), jour(15, 12), '106 rue Sainte-Cécile', { epreuve: true, zoom_url: null, groupes: [gA] }),
+    s('CCB n°3 · examen blanc', 'Toutes matières', jour(16, 9), jour(16, 12), '106 rue Sainte-Cécile', { epreuve: true, zoom_url: null, groupes: [gB] }),
+    s('CCB n°2 · cardio-pneumo', 'Cardiologie, pneumologie', jour(-10, 9), jour(-10, 12), '106 rue Sainte-Cécile', { epreuve: true, zoom_url: null }),
     s('Hématologie : anémies', 'Hématologie', jour(18, 18, 30), jour(18, 21, 30), '94 rue Sainte-Cécile', { annulee: true, modifiee_le: jour(0, 8) }),
     s('Endocrinologie : diabète de type 2', 'Endocrinologie', jour(-3, 18, 30), jour(-3, 21, 22), '94 rue Sainte-Cécile', {
       replay_url: 'https://zoom.us/rec/share/demo',
@@ -84,10 +86,13 @@ function donneesInitiales() {
     s('Sémiologie cardiaque', 'Cardiologie', jour(3, 18, 30), jour(3, 20, 30), '90 rue Sainte-Cécile', { promos: ['D1'] }),
     s('Gynécologie : grossesse extra-utérine', 'Gynécologie', jour(2, 18, 30), jour(2, 21, 30), '94 rue Sainte-Cécile', { promos: ['D4'] }),
   ];
+  const par = (debutTitre) => seances.find((x) => x.titre.startsWith(debutTitre));
   const documents = [
-    { id: uid(), seance_id: seances[6].id, type: 'support', titre: 'Diabète de type 2 – support', chemin: 'demo/support.pdf' },
-    { id: uid(), seance_id: seances[6].id, type: 'correction', titre: 'Diabète de type 2 – diapos de correction', chemin: 'demo/correction.pdf' },
-    { id: uid(), seance_id: seances[7].id, type: 'support', titre: 'Sepsis – support', chemin: 'demo/support2.pdf' },
+    { id: uid(), seance_id: par('Endocrino').id, type: 'support', titre: 'Diabète de type 2 – support', chemin: 'demo/support.pdf' },
+    { id: uid(), seance_id: par('Endocrino').id, type: 'correction', titre: 'Diabète de type 2 – diapos de correction', chemin: 'demo/correction.pdf' },
+    { id: uid(), seance_id: par('Infectio').id, type: 'support', titre: 'Sepsis – support', chemin: 'demo/support2.pdf' },
+    { id: uid(), seance_id: par('CCB n°2').id, type: 'sujet', titre: 'CCB n°2 – sujet', chemin: 'demo/ccb2-sujet.pdf' },
+    { id: uid(), seance_id: par('CCB n°2').id, type: 'correction', titre: 'CCB n°2 – correction', chemin: 'demo/ccb2-correction.pdf' },
   ];
   const annonces = [
     { id: uid(), texte: 'CCB n°3 dans deux semaines, au 106 rue Sainte-Cécile. Arrivez 15 minutes en avance.', promos: ['D2'], publiee_le: jour(0, 8) },

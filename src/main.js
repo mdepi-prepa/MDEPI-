@@ -8,6 +8,7 @@ import { estEquipe } from './lib/acces.js';
 import { vueConnexion } from './views/connexion.js';
 import { vueAccueil } from './views/accueil.js';
 import { vuePlanning } from './views/planning.js';
+import { vueEpreuves } from './views/epreuves.js';
 import { vueSeance } from './views/seance.js';
 import { vueAnnonces } from './views/annonces.js';
 import { vueBientot } from './views/bientot.js';
@@ -16,6 +17,7 @@ import { vueAdmin } from './views/admin/index.js';
 import { vueAdminComptes } from './views/admin/comptes.js';
 import { vueAdminSeances, vueAdminSeance } from './views/admin/seances.js';
 import { vueAdminAnnonces } from './views/admin/annonces.js';
+import { vueAdminEpreuves } from './views/admin/epreuves.js';
 
 // Table des écrans : #/chemin → fonction d'affichage.
 const ROUTES = [
@@ -23,6 +25,7 @@ const ROUTES = [
   ['planning', vuePlanning],
   ['planning/replays', (app) => vuePlanning(app, { onglet: 'replays' })],
   ['seance/:id', vueSeance],
+  ['epreuves', vueEpreuves],
   ['annonces', vueAnnonces],
   ['entrainement', (app) => vueBientot(app, 'Entraînement')],
   ['cartes', (app) => vueBientot(app, 'Cartes')],
@@ -32,6 +35,9 @@ const ROUTES = [
   ['admin/comptes', vueAdminComptes, 'admin'],
   ['admin/seances', vueAdminSeances, 'equipe'],
   ['admin/seances/:id', vueAdminSeance, 'equipe'],
+  ['admin/seances/copie/:copie', (app, p) => vueAdminSeance(app, { id: 'nouvelle', ...p }), 'equipe'],
+  ['admin/epreuves', vueAdminEpreuves, 'equipe'],
+  ['admin/epreuves/nouvelle', (app) => vueAdminSeance(app, { id: 'nouvelle', epreuve: true }), 'equipe'],
   ['admin/annonces', vueAdminAnnonces, 'admin'],
 ];
 
@@ -51,6 +57,7 @@ function trouverRoute(chemin) {
 const ONGLETS = [
   ['accueil', 'Accueil', icones.accueil],
   ['planning', 'Planning', icones.planning],
+  ['epreuves', 'Épreuves', icones.epreuve],
   ['entrainement', 'Entraînement', icones.entrainement],
   ['cartes', 'Cartes', icones.cartes],
   ['progres', 'Progrès', icones.progres],

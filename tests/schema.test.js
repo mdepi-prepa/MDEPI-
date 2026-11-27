@@ -129,6 +129,15 @@ describe('documents et fichiers', () => {
   });
 });
 
+describe('épreuves', () => {
+  it('une épreuve ciblée sur un groupe porte un sujet visible du seul groupe', async () => {
+    const [e] = await en(ids.prof, `insert into seances (titre, debut, fin, promos, groupes, epreuve) values ('CCB groupe B', now(), now() + interval '3 hours', '{D2}', array[$1]::uuid[], true) returning id`, [ids.gB]);
+    await en(ids.prof, `insert into documents (seance_id, type, titre, chemin) values ($1, 'sujet', 'Sujet', 'ccb/sujet.pdf')`, [e.id]);
+    expect((await en(ids.leo, `select d.type from documents d join seances s on s.id = d.seance_id where s.epreuve`))).toEqual([{ type: 'sujet' }]);
+    expect(await en(ids.camille, `select * from documents where seance_id = $1`, [e.id])).toEqual([]);
+  });
+});
+
 describe('annonces', () => {
   it('chaque promo ne voit que ses annonces', async () => {
     expect((await en(ids.camille, 'select texte from annonces order by texte')).map((r) => r.texte)).toEqual(['Pour D2', 'Pour tous']);
@@ -157,7 +166,7 @@ describe('comptes', () => {
     await en(ids.admin, `update inscrits set actif = false where email = 'leo@ex.fr'`);
     expect(await en(ids.leo, 'select titre from seances')).toEqual([]);
     await en(ids.admin, `update inscrits set actif = true where email = 'leo@ex.fr'`);
-    expect((await en(ids.leo, 'select titre from seances')).length).toBe(1);
+    expect((await en(ids.leo, 'select titre from seances')).length).toBe(2); // « Toute la D2 » + « CCB groupe B »;
   });
   it('changer le groupe d’un inscrit change ce qu’il voit', async () => {
     await en(ids.admin, `update inscrits set groupe_id = $1 where email = 'leo@ex.fr'`, [ids.gA]);

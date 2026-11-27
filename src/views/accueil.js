@@ -11,6 +11,7 @@ export async function vueAccueil(app) {
   const maintenant = new Date();
   const prochaine = seances.find((s) => !s.annulee && new Date(s.fin) > maintenant);
   const nonLues = annonces.filter((a) => !lues.has(a.id));
+  const epreuve = seances.find((s) => s.epreuve && !s.annulee && new Date(s.fin) > maintenant && s !== prochaine);
   const changements = seances.filter(
     (s) => s.modifiee_le && new Date(s.fin) > maintenant && maintenant - new Date(s.modifiee_le) < 7 * 86400000
   );
@@ -49,6 +50,13 @@ export async function vueAccueil(app) {
           </div>
         </section>`
       : html`<section class="carte">${vide('Aucune séance à venir pour le moment.')}</section>`}
+
+    ${epreuve
+      ? html`<a class="carte lien-ligne" href="#/epreuves"><span class="tuile-icone">${icones.epreuve(18)}</span>
+          <span class="pile-mini"><span class="surtitre">PROCHAINE ÉPREUVE · ${compteARebours(epreuve.debut, epreuve.fin, maintenant).toUpperCase()}</span>
+          <strong>${epreuve.titre}</strong><span class="aide">${dateLongue(epreuve.debut)} · ${plageHoraire(epreuve.debut, epreuve.fin)} · ${epreuve.lieu}</span></span>
+          ${icones.chevron(16)}</a>`
+      : ''}
 
     <section class="pile-petite">
       <h2 class="titre-section">Bientôt dans l'app</h2>
