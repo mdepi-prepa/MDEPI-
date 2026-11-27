@@ -43,11 +43,11 @@ export async function vueAdminQcm(app, { id }) {
             <a class="btn contour" href="#/admin/epreuves/${id}/corrige">Sujet corrigé (aperçu, PDF)</a>
             ${restants ? html`<button class="btn contour" data-action="publier">${s.correction_publiee ? 'Masquer la copie corrigée' : 'Publier la copie corrigée dès maintenant'}</button>` : ''}
           </div>
-          <p class="aide">Chaque étudiant voit sa note, la moyenne et son rang dès la fin de son épreuve ; les groupes suivants s'ajoutent au classement.
+          <p class="aide">Chaque étudiant voit sa note, la moyenne, son rang et sa copie corrigée dès la fin de son épreuve ; les groupes suivants s'ajoutent au classement.
             ${restants
               ? s.correction_publiee
                 ? 'Copie corrigée publiée en avance : attention, les groupes qui n’ont pas encore composé peuvent la voir.'
-                : `La copie corrigée (bonnes réponses) s'affichera automatiquement quand le dernier groupe aura fini (${restants} groupe${restants > 1 ? 's' : ''} restant${restants > 1 ? 's' : ''}).`
+                : `Chaque groupe voit sa copie corrigée et peut rejouer l'épreuve en entraînement dès la fin de sa propre épreuve (${restants} groupe${restants > 1 ? 's' : ''} ${restants > 1 ? "n'ont" : "n'a"} pas encore fini).`
               : 'Tous les groupes ont fini : copie corrigée visible, épreuve disponible en entraînement.'}</p>`
         : ''}
     </section>

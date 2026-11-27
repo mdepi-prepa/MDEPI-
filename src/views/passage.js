@@ -84,7 +84,7 @@ async function accueilEpreuve(app, s, infos, copie, ouverte) {
               : html`<p class="aide">Classement définitif : tous les groupes ont passé l'épreuve.</p>`}
             ${infos.correction_visible
               ? html`<a class="btn plein" href="#/epreuve/${s.id}/correction">Voir ma copie corrigée</a>`
-              : html`<p class="aide">La copie corrigée sera visible quand tous les groupes auront passé l'épreuve.</p>`}
+              : html`<p class="aide">La copie corrigée n'est pas encore disponible.</p>`}
           </section>`
         : html`<p class="aide">Votre note et votre rang apparaîtront ici à la fin de l'épreuve, le ${dateLongue(s.fin).toLowerCase()} à ${heure(s.fin)}.</p>`
       : ''}
@@ -405,7 +405,7 @@ export async function vueMaCorrection(app, { id }) {
   const s = await app.api.seance(id);
   const [qcm, corrections, copie, resultat, infos] = await Promise.all([app.api.qcm(id), app.api.corrections(id), app.api.maCopie(id), app.api.monResultat(id), app.api.infosQcm(id)]);
   if (!s || !resultat || !infos.correction_visible) {
-    return { html: html`<div class="page">${enTete('Correction', null, `#/epreuve/${id}`)}<p>La copie corrigée sera visible quand tous les groupes auront passé l'épreuve.</p></div>` };
+    return { html: html`<div class="page">${enTete('Correction', null, `#/epreuve/${id}`)}<p>La copie corrigée sera visible dès la fin de l'épreuve.</p></div>` };
   }
   const vue = html`<div class="page">
     ${enTete('Ma copie corrigée', null, `#/epreuve/${id}`)}

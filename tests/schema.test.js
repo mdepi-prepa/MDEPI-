@@ -211,9 +211,9 @@ describe('QCM des épreuves', () => {
     let [r] = await en(ids.camille, 'select * from mon_resultat($1)', [q.e]);
     // Q1 : {A,B,C} contre {A,B} = 1 discordance = 0,5 ; Q2 : juste = 1 → 1,5 / 2 = 15/20
     expect([Number(r.points), Number(r.note20), r.rang, r.effectif, r.groupes_restants]).toEqual([1.5, 15, 1, 1, 1]);
-    // Le groupe B n'a pas composé : pas de correction détaillée pour le groupe A.
-    expect(await en(ids.camille, 'select * from corrections')).toEqual([]);
-    await expect(en(ids.camille, `insert into entrainements (serie_id) values ($1)`, [q.e])).rejects.toThrow(/row-level/);
+    // Le groupe A a fini : sa copie corrigée est visible tout de suite ; pas pour le groupe B, qui n'a pas composé.
+    expect((await en(ids.camille, 'select * from corrections')).length).toBe(2);
+    expect(await en(ids.leo, 'select * from corrections')).toEqual([]);
     // Le groupe B compose : sa copie ne compte qu'à la fin de son épreuve.
     await db.query(`update seances set debut = now() - interval '10 minutes', fin = now() + interval '1 hour' where id = $1`, [q.e2]);
     await en(ids.leo, 'select commencer_epreuve($1)', [q.e2]);
@@ -224,8 +224,8 @@ describe('QCM des épreuves', () => {
     [r] = await en(ids.camille, 'select * from mon_resultat($1)', [q.e]);
     expect([Number(r.note20), r.rang, r.effectif, Number(r.moyenne), r.groupes_restants]).toEqual([15, 2, 2, 17.5, 0]);
     expect((await en(ids.leo, 'select rang from mon_resultat($1)', [q.e2]))[0].rang).toBe(1);
-    // Tous les groupes ont fini : correction visible, entraînement possible.
-    expect((await en(ids.camille, 'select * from corrections')).length).toBe(2);
+    // Le groupe B a fini : correction visible pour lui aussi, entraînement possible.
+    expect((await en(ids.leo, 'select * from corrections')).length).toBe(2);
     expect((await en(ids.camille, 'select correction_visible from infos_qcm($1)', [q.e]))[0].correction_visible).toBe(true);
     await en(ids.camille, `insert into entrainements (serie_id, points, total) values ($1, 2, 2)`, [q.e]);
     expect((await en(ids.camille, 'select points from entrainements')).length).toBe(1);

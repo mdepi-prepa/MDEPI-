@@ -213,10 +213,9 @@ export function creerBackendDemo() {
   const ouverte = (s) => s.epreuve && !s.annulee && new Date(s.debut) <= new Date() && new Date() <= new Date(new Date(s.fin).getTime() + 2 * 60000);
   const serieVisible = (serie, test) => estEquipe(profil()) || db.seances.some((x) => serieDe(x) === serie && peutVoirSeance(profil(), x) && test(x));
   const voirSujet = (serie) => serieVisible(serie, (x) => new Date(x.debut) <= new Date());
-  // Même règle que peut_voir_correction (schema.sql) : tous les groupes ont fini, ou publication anticipée.
-  const serieTerminee = (serie) => !db.seances.some((x) => serieDe(x) === serie && !x.annulee && new Date(x.fin) > new Date());
+  // Même règle que peut_voir_correction (schema.sql) : dès la fin de sa propre séance, ou publication anticipée.
   const groupesRestants = (serie) => db.seances.filter((x) => serieDe(x) === serie && !x.annulee && new Date(x.fin) > new Date()).length;
-  const voirCorrection = (serie) => serieVisible(serie, (x) => x.correction_publiee || (new Date(x.debut) <= new Date() && serieTerminee(serie)));
+  const voirCorrection = (serie) => serieVisible(serie, (x) => !x.annulee && (x.correction_publiee || new Date(x.fin) <= new Date()));
   const notesSerie = (serie, finies = false) => {
     const ids = new Set(db.seances.filter((x) => serieDe(x) === serie && (!finies || new Date(x.fin) <= new Date())).map((x) => x.id));
     const questions = db.questions.filter((q) => q.serie_id === serie);

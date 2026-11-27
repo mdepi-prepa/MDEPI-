@@ -43,7 +43,7 @@ export async function vueEntrainement(app) {
       <p class="aide">Rejouez les épreuves terminées, avec la correction après chaque question. Ces tentatives ne comptent pas dans le classement.</p>
       <section class="pile-petite">
         <h2 class="titre-section">Épreuves à rejouer</h2>
-        ${liste.length ? liste.map(ligne) : html`<div class="carte">${vide('Les épreuves apparaîtront ici quand tous les groupes les auront passées.')}</div>`}
+        ${liste.length ? liste.map(ligne) : html`<div class="carte">${vide('Les épreuves apparaîtront ici dès la fin de votre épreuve.')}</div>`}
       </section>
     </div>`,
   };

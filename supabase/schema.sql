@@ -356,21 +356,15 @@ returns boolean language sql stable security definer set search_path = public as
     where public.serie_de(s) = p_serie and public.peut_voir_seance(s) and now() >= s.debut)
 $$;
 
--- Série terminée : tous les groupes (séances non annulées) ont fini l'épreuve.
-create or replace function public.serie_terminee(p_serie uuid)
-returns boolean language sql stable security definer set search_path = public as $$
-  select not exists (select 1 from public.seances s where public.serie_de(s) = p_serie and not s.annulee and s.fin > now())
-$$;
-
--- Correction détaillée (bonnes réponses) : visible quand tous les groupes ont
--- passé l'épreuve, ou plus tôt si l'équipe la publie. Elle ne doit pas fuiter
--- vers un groupe qui n'a pas encore composé.
+-- Copie corrigée (bonnes réponses) : visible par chaque étudiant dès la fin de
+-- SA séance (son groupe a composé), ou plus tôt si l'équipe la publie. Un groupe
+-- qui n'a pas encore composé ne la voit pas dans l'app.
 create or replace function public.peut_voir_correction(p_serie uuid)
 returns boolean language sql stable security definer set search_path = public as $$
   select public.est_equipe() or exists (
     select 1 from public.seances s
-    where public.serie_de(s) = p_serie and public.peut_voir_seance(s)
-      and (s.correction_publiee or (now() >= s.debut and public.serie_terminee(p_serie))))
+    where public.serie_de(s) = p_serie and public.peut_voir_seance(s) and not s.annulee
+      and (s.correction_publiee or now() >= s.fin))
 $$;
 
 -- Barème MDEPi (type EDN). QRM : 0 discordance = 1, 1 = 0,5, 2 = 0,2, 3+ = 0.
