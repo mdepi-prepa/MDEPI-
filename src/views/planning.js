@@ -32,12 +32,8 @@ export async function vuePlanning(app, { onglet = 'avenir' } = {}) {
       )
     : vide('Aucune séance à venir.');
 
-  // « Support », « Correction », ou numérotés s'il y en a plusieurs du même type.
-  const libelleDoc = (d, liste) => {
-    const nom = d.type === 'correction' ? 'Correction' : 'Support';
-    const memes = liste.filter((x) => x.type === d.type);
-    return memes.length > 1 ? `${nom} ${memes.indexOf(d) + 1}` : nom;
-  };
+  // Support et diapos de correction s'affichent tous deux comme « Support » (numérotés s'il y en a plusieurs).
+  const libelleDoc = (d, liste) => (liste.length > 1 ? `Support ${liste.indexOf(d) + 1}` : 'Support');
 
   const cartePassee = (s) => {
     const replay = urlSure(s.replay_url);
