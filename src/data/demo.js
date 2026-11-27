@@ -323,7 +323,12 @@ export function creerBackendDemo() {
     },
     async documents(seanceId) {
       const s = await this.seance(seanceId);
-      return s ? db.documents.filter((d) => d.seance_id === seanceId) : [];
+      if (!s) return [];
+      // Même règle que peut_voir_document (schema.sql).
+      const visible = (d) =>
+        estEquipe(profil()) || !s.epreuve || s.correction_publiee || publies(s) ||
+        (d.type === 'support' && finie(s)) || (d.type === 'sujet' && new Date(s.debut) <= new Date());
+      return db.documents.filter((d) => d.seance_id === seanceId && visible(d));
     },
     async urlDocument() {
       const pdf = '%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj 2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj 3 0 obj<</Type/Page/MediaBox[0 0 595 842]/Parent 2 0 R>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF';

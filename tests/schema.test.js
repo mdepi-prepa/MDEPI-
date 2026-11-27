@@ -369,15 +369,15 @@ describe('QCM des épreuves', () => {
     await en(ids.prof, 'delete from seances where id = $1', [d.id]);
     await en(ids.prof, 'delete from seances where id = $1', [o.id]);
   });
-  it('sujet PDF d’une épreuve visible dès son début, correction PDF seulement après sa fin', async () => {
+  it('sujet PDF d’une épreuve visible dès son début, support et correction PDF seulement après sa fin', async () => {
     const [e] = await en(ids.prof, `insert into seances (titre, debut, fin, promos, epreuve) values ('Papier', now() + interval '1 hour', now() + interval '2 hours', '{D2}', true) returning id`);
     await en(ids.prof, `insert into documents (seance_id, type, titre, chemin) values ($1,'correction','Corr','p/corr.pdf'),($1,'sujet','Sujet','p/sujet.pdf'),($1,'support','Fiche','p/fiche.pdf')`, [e.id]);
     await db.query(`insert into storage.objects (bucket_id, name) values ('documents','p/corr.pdf'),('documents','p/fiche.pdf')`);
-    expect((await en(ids.camille, 'select type from documents where seance_id = $1', [e.id])).map((r) => r.type)).toEqual(['support']);
-    expect((await en(ids.camille, `select name from storage.objects where name like 'p/%'`)).map((r) => r.name)).toEqual(['p/fiche.pdf']);
+    expect((await en(ids.camille, 'select type from documents where seance_id = $1', [e.id])).map((r) => r.type)).toEqual([]);
+    expect((await en(ids.camille, `select name from storage.objects where name like 'p/%'`)).map((r) => r.name)).toEqual([]);
     await db.query(`update seances set debut = now() - interval '1 hour' where id = $1`, [e.id]);
-    expect((await en(ids.camille, 'select type from documents where seance_id = $1 order by type', [e.id])).map((r) => r.type)).toEqual(['sujet', 'support']);
-    expect((await en(ids.camille, `select name from storage.objects where name like 'p/%'`)).map((r) => r.name)).toEqual(['p/fiche.pdf']);
+    expect((await en(ids.camille, 'select type from documents where seance_id = $1 order by type', [e.id])).map((r) => r.type)).toEqual(['sujet']);
+    expect((await en(ids.camille, `select name from storage.objects where name like 'p/%'`)).map((r) => r.name)).toEqual([]);
     await db.query(`update seances set fin = now() - interval '3 minutes', debut = now() - interval '2 hours' where id = $1`, [e.id]);
     expect((await en(ids.camille, 'select type from documents where seance_id = $1 order by type', [e.id])).map((r) => r.type)).toEqual(['correction', 'sujet', 'support']);
     expect((await en(ids.camille, `select name from storage.objects where name like 'p/%' order by name`)).length).toBe(2);

@@ -46,6 +46,7 @@ export async function vueSeance(app, { id }) {
         : ''}
       ${passee && !s.replay_url && !s.annulee && !s.epreuve ? html`<p class="aide">Le replay sera ajouté ici dès qu'il sera disponible.</p>` : ''}
       ${passee && s.epreuve && !docs.length && !enLigne ? html`<p class="aide">Le sujet et la correction seront ajoutés ici après l'épreuve.</p>` : ''}
+      ${s.epreuve && !passee && !s.annulee && !equipe ? html`<p class="aide">Le support et la correction apparaîtront ici à la fin de l'épreuve.</p>` : ''}
     </section>
     ${enLigne && !s.annulee ? blocEpreuve(s, infos, copie, equipe) : ''}
     ${listeDocs('Sujet', sujets)}
