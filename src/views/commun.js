@@ -55,3 +55,23 @@ export function boutonZoom(s, classe = 'btn contour') {
 export function vide(texte) {
   return html`<div class="vide">${texte}</div>`;
 }
+
+// Amène la question en cours en haut de l'écran et l'y garde pendant que les
+// images des questions précédentes (au-dessus) se chargent et poussent la
+// page vers le bas. On arrête dès que l'étudiant défile lui-même.
+export function ancrerQuestion(zone) {
+  const cible = zone.querySelector('[data-q-courante]') || zone;
+  const placer = () => cible.scrollIntoView({ block: 'start' });
+  placer();
+  let libre = false;
+  const lacher = () => (libre = true);
+  for (const ev of ['wheel', 'touchmove', 'keydown', 'pointerdown']) window.addEventListener(ev, lacher, { once: true, passive: true });
+  const recaler = () => !libre && document.body.contains(cible) && placer();
+  for (const img of zone.querySelectorAll('img')) if (!img.complete) img.addEventListener('load', recaler, { once: true });
+  // Images dont le lien arrive après coup (chargerImages) : on recale un moment.
+  if ('ResizeObserver' in window) {
+    const obs = new ResizeObserver(recaler);
+    obs.observe(zone);
+    setTimeout(() => obs.disconnect(), 4000);
+  }
+}

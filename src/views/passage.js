@@ -11,7 +11,7 @@ import { icones } from '../lib/icones.js';
 import { dateLongue, heure } from '../lib/dates.js';
 import { estEquipe } from '../lib/acces.js';
 import { aPlat, lettre, htmlQcm, chargerImages, LIBELLES_TYPES } from '../lib/qcm.js';
-import { enTete } from './commun.js';
+import { ancrerQuestion, enTete } from './commun.js';
 import { bandeauNote, qcmCorrige } from './qcm-rendu.js';
 
 const HORS_LIGNE = 'Pas de connexion internet.';
@@ -342,7 +342,7 @@ async function passage(app, s, copie) {
       dessinerQuestion();
       // On amène la question elle-même en haut de l'écran (sur téléphone, le
       // sommaire est au-dessus : il ne faut pas y remonter).
-      (zoneQ.querySelector('[data-q-courante]') || zoneQ).scrollIntoView({ block: 'start', behavior: 'smooth' });
+      ancrerQuestion(zoneQ);
     }
 
     // --- Résumé et envoi final ---

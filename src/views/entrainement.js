@@ -10,7 +10,7 @@ import { icones } from '../lib/icones.js';
 import { dateCourte } from '../lib/dates.js';
 import { points, formatNote, noteSur20, pointsPonderes, coefficient } from '../lib/bareme.js';
 import { serieDe, aPlat, lettre, htmlQcm, chargerImages, LIBELLES_TYPES, noterCopie, CATEGORIES, categorieDe } from '../lib/qcm.js';
-import { enTete, vide } from './commun.js';
+import { ancrerQuestion, enTete, vide } from './commun.js';
 import { questionCorrigee, sommaireCopie } from './qcm-rendu.js';
 
 const CLE_ONGLET = 'mdepi-entrainement-onglet';
@@ -316,7 +316,7 @@ export async function vueRejouer(app, { id }) {
       courant = k;
       dessinerNavE();
       dessinerQuestionE();
-      (zone.querySelector('[data-q-courante]') || zone).scrollIntoView({ block: 'start', behavior: 'smooth' });
+      ancrerQuestion(zone);
     };
 
     // Garde les cases cochées (non validées) quand on change de question.
