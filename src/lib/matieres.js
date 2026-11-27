@@ -1,0 +1,51 @@
+// Matières proposées pour une séance (back-office › Planning).
+// Liste des disciplines du programme des EDN (R2C), par ordre alphabétique.
+// Pour l'adapter : ajoutez, renommez ou retirez une ligne ici. Une séance
+// dont la matière n'est pas dans la liste s'affiche avec « Autre ».
+export const MATIERES = [
+  'Addictologie',
+  'Allergologie',
+  'Anatomie et cytologie pathologiques',
+  'Anesthésie-réanimation',
+  'Cardiologie',
+  'Chirurgie digestive',
+  'Chirurgie maxillo-faciale',
+  'Chirurgie orthopédique et traumatologique',
+  'Chirurgie plastique',
+  'Chirurgie thoracique et cardiovasculaire',
+  'Chirurgie vasculaire',
+  'Dermatologie',
+  'Douleur et soins palliatifs',
+  'Endocrinologie, diabétologie, nutrition',
+  'Génétique',
+  'Gériatrie',
+  'Gynécologie-obstétrique',
+  'Hématologie',
+  'Hépato-gastro-entérologie',
+  'Immunologie',
+  'Maladies infectieuses et tropicales',
+  'Médecine d’urgence',
+  'Médecine du travail',
+  'Médecine générale',
+  'Médecine intensive-réanimation',
+  'Médecine interne',
+  'Médecine légale',
+  'Médecine physique et de réadaptation',
+  'Néphrologie',
+  'Neurochirurgie',
+  'Neurologie',
+  'Oncologie',
+  'Ophtalmologie',
+  'ORL',
+  'Pédiatrie',
+  'Pharmacologie',
+  'Pneumologie',
+  'Psychiatrie',
+  'Radiologie et imagerie',
+  'Rhumatologie',
+  'Santé publique',
+  'Urologie',
+];
+
+// En tête de liste, pour les CCB et examens blancs.
+export const TOUTES_MATIERES = 'Toutes matières';

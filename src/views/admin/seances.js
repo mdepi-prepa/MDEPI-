@@ -1,6 +1,7 @@
 // Back-office : séances du planning, replays et documents.
 import { html } from '../../lib/html.js';
 import { LIEUX, CODES_PROMOS } from '../../lib/promos.js';
+import { MATIERES, TOUTES_MATIERES } from '../../lib/matieres.js';
 import { dateCourte, plageHoraire, versChampsDate, depuisChampsDate } from '../../lib/dates.js';
 import { enteteAdmin } from './index.js';
 import { casesPromos } from './annonces.js';
@@ -72,6 +73,7 @@ export async function vueAdminSeance(app, { id, copie, epreuve }) {
   const deb = s.debut ? versChampsDate(s.debut) : { date: '', heure: '18:30' };
   const fin = s.fin ? versChampsDate(s.fin) : { heure: '21:30' };
   const lieuAutre = s.lieu && !LIEUX.includes(s.lieu);
+  const matiereAutre = s.matiere && s.matiere !== TOUTES_MATIERES && !MATIERES.includes(s.matiere);
 
   const vue = html`<div class="page">
     ${enteteAdmin(copie ? (s.epreuve ? "Dupliquer l'épreuve" : 'Dupliquer la séance') : nouvelle ? (s.epreuve ? 'Nouvelle épreuve' : 'Nouvelle séance') : `Modifier la ${nom}`, retour)}
@@ -82,7 +84,14 @@ export async function vueAdminSeance(app, { id, copie, epreuve }) {
       : ''}
     <form class="carte pile" id="f-seance">
       <label class="champ"><span>Titre</span><input name="titre" required value="${s.titre}" placeholder="${s.epreuve ? 'CCB n°3 · examen blanc' : 'Cardiologie : syndromes coronariens aigus'}"></label>
-      <label class="champ"><span>Matière</span><input name="matiere" value="${s.matiere}" placeholder="Cardiologie"></label>
+      <label class="champ"><span>Matière</span>
+        <select name="matiere">
+          <option value="" ${s.matiere ? '' : 'selected'}>Choisir…</option>
+          <option ${s.matiere === TOUTES_MATIERES ? 'selected' : ''}>${TOUTES_MATIERES}</option>
+          ${MATIERES.map((m) => html`<option ${s.matiere === m ? 'selected' : ''}>${m}</option>`)}
+          <option value="__autre" ${matiereAutre ? 'selected' : ''}>Autre…</option>
+        </select></label>
+      <label class="champ" data-matiere-autre ${matiereAutre ? '' : 'hidden'}><span>Autre matière</span><input name="matiere_autre" value="${matiereAutre ? s.matiere : ''}" placeholder="Ex. Méthodologie, Lecture critique d’article"></label>
       <div class="grille-3">
         <label class="champ"><span>Date</span><input type="date" name="date" required value="${deb.date}"></label>
         <label class="champ"><span>Début</span><input type="time" name="h_debut" required value="${deb.heure}"></label>
@@ -144,6 +153,13 @@ export async function vueAdminSeance(app, { id, copie, epreuve }) {
     const erreur = form.querySelector('.erreur');
     const champAutre = form.querySelector('[data-autre]');
     form.lieu.addEventListener('change', () => (champAutre.hidden = form.lieu.value !== '__autre'));
+    const champMatiere = form.querySelector('[data-matiere-autre]');
+    form.matiere.addEventListener('change', () => {
+      champMatiere.hidden = form.matiere.value !== '__autre';
+      form.matiere_autre.required = !champMatiere.hidden;
+      if (!champMatiere.hidden) form.matiere_autre.focus();
+    });
+    form.matiere_autre.required = !champMatiere.hidden;
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -171,7 +187,7 @@ export async function vueAdminSeance(app, { id, copie, epreuve }) {
       }
       const donnees = {
         titre: String(d.get('titre')).trim(),
-        matiere: String(d.get('matiere')).trim(),
+        matiere: (d.get('matiere') === '__autre' ? String(d.get('matiere_autre')) : String(d.get('matiere'))).trim(),
         debut: debut.toISOString(),
         fin: finD.toISOString(),
         lieu,

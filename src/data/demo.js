@@ -83,7 +83,7 @@ function donneesInitiales() {
       groupes: [gA],
       modifiee_le: jour(-1, 10),
     }),
-    s('Gastro-entérologie : hémorragies digestives', 'Gastro-entérologie', jour(11, 18, 30), jour(11, 21, 30), '94 rue Sainte-Cécile', {
+    s('Gastro-entérologie : hémorragies digestives', 'Hépato-gastro-entérologie', jour(11, 18, 30), jour(11, 21, 30), '94 rue Sainte-Cécile', {
       groupes: [gB],
     }),
     s('CCB n°3 · examen blanc', 'Toutes matières', jour(15, 9), jour(15, 12), '106 rue Sainte-Cécile', { epreuve: true, zoom_url: null, groupes: [gA] }),
@@ -93,7 +93,7 @@ function donneesInitiales() {
     s('Partiel blanc · hépato-biliaire', 'Hépato-gastro-entérologie', jour(2, 9), jour(2, 11), '106 rue Sainte-Cécile', { epreuve: true, zoom_url: null, groupes: [gB] }),
     s('Épreuve en ligne · HGE', 'Hépato-gastro-entérologie', minutes(-20), minutes(100), 'En ligne', { epreuve: true, zoom_url: null }),
     s('Hématologie : anémies', 'Hématologie', jour(18, 18, 30), jour(18, 21, 30), '94 rue Sainte-Cécile', { annulee: true, modifiee_le: jour(0, 8) }),
-    s('Endocrinologie : diabète de type 2', 'Endocrinologie', jour(-3, 18, 30), jour(-3, 21, 22), '94 rue Sainte-Cécile', {
+    s('Endocrinologie : diabète de type 2', 'Endocrinologie, diabétologie, nutrition', jour(-3, 18, 30), jour(-3, 21, 22), '94 rue Sainte-Cécile', {
       replay_url: 'https://zoom.us/rec/share/demo',
       replay_duree_min: 172,
     }),
