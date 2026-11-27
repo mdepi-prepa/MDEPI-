@@ -38,6 +38,20 @@ export async function vuePassage(app, { id }) {
   return accueilEpreuve(app, s, infos, copie, ouverte);
 }
 
+// Pourquoi la note n'est pas (encore) affichée.
+function messageAttente(s, infos) {
+  if (new Date() < new Date(s.fin)) {
+    if (infos.publication === 'jamais') return "Les résultats de cette épreuve ne seront pas affichés dans l'app.";
+    if (infos.publication === 'date' && infos.publication_le) return `Votre note et votre rang seront publiés le ${dateLongue(infos.publication_le).toLowerCase()} à ${heure(infos.publication_le)}.`;
+    return `Votre note et votre rang apparaîtront ici à la fin de l'épreuve, le ${dateLongue(s.fin).toLowerCase()} à ${heure(s.fin)}.`;
+  }
+  if (infos.publication === 'jamais') return "Les résultats de cette épreuve ne sont pas affichés dans l'app.";
+  if (infos.publication === 'date' && infos.publication_le && new Date() < new Date(infos.publication_le))
+    return `Votre note et votre rang seront publiés le ${dateLongue(infos.publication_le).toLowerCase()} à ${heure(infos.publication_le)}.`;
+  if (infos.qroc_en_cours) return "Correction en cours : l'équipe vérifie les réponses aux QROC. Votre note et votre rang apparaîtront ici dès qu'elle aura fini.";
+  return 'Votre note et votre rang apparaîtront ici dans quelques minutes, le temps que les dernières copies arrivent.';
+}
+
 // ---------- Page d'informations (avant, ou après l'épreuve) ----------
 async function accueilEpreuve(app, s, infos, copie, ouverte) {
   const equipe = estEquipe(app.profil);
@@ -86,7 +100,10 @@ async function accueilEpreuve(app, s, infos, copie, ouverte) {
               ? html`<a class="btn plein" href="#/epreuve/${s.id}/correction">Voir ma copie corrigée</a>`
               : html`<p class="aide">La copie corrigée n'est pas encore disponible.</p>`}
           </section>`
-        : html`<p class="aide">Votre note et votre rang apparaîtront ici à la fin de l'épreuve, le ${dateLongue(s.fin).toLowerCase()} à ${heure(s.fin)}.</p>`
+        : html`<section class="carte pile">
+            <p class="aide">${messageAttente(s, infos)}</p>
+            ${infos.correction_visible ? html`<a class="btn plein" href="#/epreuve/${s.id}/correction">Voir ma copie corrigée</a>` : ''}
+          </section>`
       : ''}
     ${infos.correction_visible && !ouverte && !avant && !equipe
       ? html`<a class="btn contour" href="#/entrainement/${s.id}">Rejouer cette épreuve en entraînement</a>`
@@ -162,7 +179,6 @@ async function passage(app, s, copie) {
     const zoneQ = el.querySelector('[data-question]');
     const zoneNav = el.querySelector('[data-nav]');
     const resume = el.querySelector('[data-resume]');
-    let envoiEnCours = false;
     let fini = false;
     let confirmerVide = false;
 
@@ -171,20 +187,30 @@ async function passage(app, s, copie) {
       statut.textContent = texte;
       statut.className = 'aide ' + classe;
     };
-    async function envoyer() {
-      if (envoiEnCours || fini) return;
-      envoiEnCours = true;
+    // Envoie les réponses en attente, dans l'ordre. Renvoie une promesse que
+    // l'on peut attendre (chargement de la question suivante d'un dossier).
+    let envoi = null;
+    function envoyer() {
+      if (fini) return Promise.resolve();
+      if (!envoi) envoi = vider().finally(() => (envoi = null));
+      return envoi;
+    }
+    async function vider() {
       try {
-        for (const [qid, r] of Object.entries(attente)) {
+        while (Object.keys(attente).length && !fini) {
+          const [qid, r] = Object.entries(attente)[0];
           afficherStatut('Enregistrement…');
           try {
             await app.api.enregistrerReponse(s.id, qid, r.choix, r.texte, r.valider);
-            if (attente[qid] === r) delete attente[qid];
+            if (attente[qid] === r) delete attente[qid]; // sinon modifiée entre-temps : renvoyée au tour suivant
           } catch (err) {
             if (err.message === HORS_LIGNE || /fetch|network/i.test(err.message)) throw err;
             delete attente[qid]; // refus définitif (question déjà validée, épreuve fermée…)
             app.message(err.message, 'erreur');
-            if (/fermée|rendue/i.test(err.message)) return terminer(true);
+            if (/fermée|rendue/i.test(err.message)) {
+              terminer(true);
+              return;
+            }
           }
           garderAttente();
         }
@@ -192,10 +218,18 @@ async function passage(app, s, copie) {
       } catch {
         afficherStatut('Hors ligne : vos réponses sont gardées sur cet appareil', 'attention');
         setTimeout(envoyer, 5000);
-      } finally {
-        envoiEnCours = false;
-        if (Object.keys(attente).length && navigator.onLine !== false && statut.classList.contains('ok')) envoyer();
       }
+    }
+    // Question d'un dossier progressif pas encore reçue : la base ne l'envoie
+    // qu'une fois la précédente validée chez elle, donc on envoie d'abord.
+    async function charger(q) {
+      if (!q.verrouillee) return true;
+      await envoyer();
+      if (Object.keys(attente).length) return false;
+      const c = await app.api.question(s.id, q.id).catch(() => null);
+      if (!c) return false;
+      Object.assign(q, c, { verrouillee: false });
+      return true;
     }
     function noter(q, valider = false) {
       const r = rep(q);
@@ -241,6 +275,7 @@ async function passage(app, s, copie) {
           : ''}
         <header class="q-bandeau"><span>Question ${q.num}</span><span>${LIBELLES_TYPES[q.type]}</span></header>
         <div class="q-enonce">${brut(htmlQcm(q.enonce))}</div>
+        ${q.type === 'QRP' ? html`<p class="alerte" data-qrp>${q.nb_reponses} réponse${q.nb_reponses > 1 ? 's' : ''} attendue${q.nb_reponses > 1 ? 's' : ''} : vous ne pouvez pas cocher plus de ${q.nb_reponses} case${q.nb_reponses > 1 ? 's' : ''}.</p>` : ''}
         ${q.type === 'QROC'
           ? html`<label class="champ"><span>Votre réponse</span><input class="qroc" data-qroc maxlength="500" autocomplete="off" value="${r.texte || ''}" ${fige ? 'disabled' : ''}></label>`
           : html`<fieldset class="propositions" ${fige ? 'disabled' : ''}><legend class="sr">Propositions</legend>${q.propositions.map(
@@ -263,10 +298,20 @@ async function passage(app, s, copie) {
       zoneQ.querySelector('[data-qroc]')?.focus({ preventScroll: true });
     }
 
-    function aller(i) {
+    async function aller(i) {
       if (i < 0 || i >= questions.length || !accessible(questions[i])) return;
       courant = i;
       dessinerNav();
+      if (questions[i].verrouillee) {
+        zoneQ.innerHTML = '<p class="aide">Chargement de la question…</p>';
+        const ok = await charger(questions[i]);
+        if (courant !== i) return;
+        if (!ok) {
+          zoneQ.innerHTML = String(html`<p class="alerte attention">La question suivante s'affichera dès le retour du réseau. Vos réponses sont gardées sur cet appareil.</p>`);
+          window.addEventListener('online', () => courant === i && aller(i), { once: true });
+          return;
+        }
+      }
       dessinerQuestion();
       el.querySelector('.passage-corps').scrollIntoView({ block: 'start' });
     }
@@ -291,8 +336,10 @@ async function passage(app, s, copie) {
       resume.querySelector('[data-action=retour]').focus();
     }
 
+    let finEnCours = false;
     async function terminer(auto = false) {
-      if (fini) return;
+      if (fini || finEnCours) return;
+      finEnCours = true;
       try {
         // Dernières réponses en attente.
         for (const [qid, r] of Object.entries(attente)) {
@@ -318,6 +365,8 @@ async function passage(app, s, copie) {
           p.hidden = false;
         } else app.message(texte, 'erreur');
         if (auto) setTimeout(() => terminer(true), 5000);
+      } finally {
+        finEnCours = false;
       }
     }
 
@@ -325,6 +374,12 @@ async function passage(app, s, copie) {
     el.addEventListener('change', (e) => {
       if (e.target.name !== 'p') return;
       const q = questions[courant];
+      // QRP : pas plus de n cases.
+      if (q.type === 'QRP' && e.target.checked && zoneQ.querySelectorAll('input[name=p]:checked').length > (q.nb_reponses || 99)) {
+        e.target.checked = false;
+        app.message(`${q.nb_reponses} réponses attendues : décochez une case avant d'en cocher une autre.`, 'erreur');
+        return;
+      }
       reponses[q.id] = { ...rep(q), choix: [...zoneQ.querySelectorAll('input[name=p]:checked')].map((i) => i.value) };
       zoneQ.querySelector('[data-vide]').hidden = true;
       confirmerVide = false;
@@ -392,28 +447,34 @@ async function passage(app, s, copie) {
     }
     window.addEventListener('hashchange', nettoyer);
 
-    dessinerNav();
-    dessinerQuestion();
+    if (courant >= 0) aller(courant);
+    else {
+      dessinerNav();
+      dessinerQuestion();
+    }
     if (Object.keys(attente).length) envoyer();
   }
 
   return { html: vue, monter, titre: s.titre };
 }
 
+const BAREME =
+  'Barème (comme Théia) : QRM 1 point sans erreur, 0,5 avec une erreur, 0,2 avec deux, 0 sans réponse ; QRU 1 point ; QRP bonnes réponses cochées ÷ réponses attendues ; QROC 1 point, ou 0,5 si la réponse est jugée acceptable. Une proposition indispensable oubliée ou inacceptable cochée met 0 à la question. Chaque question compte pour sa pondération.';
+
 // Copie corrigée de l'étudiant.
 export async function vueMaCorrection(app, { id }) {
   const s = await app.api.seance(id);
   const [qcm, corrections, copie, resultat, infos] = await Promise.all([app.api.qcm(id), app.api.corrections(id), app.api.maCopie(id), app.api.monResultat(id), app.api.infosQcm(id)]);
-  if (!s || !resultat || !infos.correction_visible) {
-    return { html: html`<div class="page">${enTete('Correction', null, `#/epreuve/${id}`)}<p>La copie corrigée sera visible dès la fin de l'épreuve.</p></div>` };
+  if (!s || !copie || !infos.correction_visible) {
+    return { html: html`<div class="page">${enTete('Correction', null, `#/epreuve/${id}`)}<p>La copie corrigée n'est pas encore disponible.</p></div>` };
   }
   const vue = html`<div class="page">
     ${enTete('Ma copie corrigée', null, `#/epreuve/${id}`)}
     <section class="carte pile">
       <h2 class="titre-seance">${s.titre}</h2>
       <p class="aide">${dateLongue(s.debut)} · copie ${copie?.rendue_le ? `envoyée à ${heure(copie.rendue_le)}` : 'non envoyée'}</p>
-      ${bandeauNote(resultat)}
-      <p class="aide">Barème : QRM 1 point sans erreur, 0,5 avec une erreur, 0,2 avec deux ; QRU et QROC 1 point.</p>
+      ${resultat ? bandeauNote(resultat) : html`<p class="aide">${messageAttente(s, infos)}</p>`}
+      <p class="aide">${BAREME}</p>
       <button class="btn contour no-print" onclick="window.print()">${icones.fichier(16)} Imprimer ou enregistrer en PDF</button>
     </section>
     <div class="legende"><span class="v-juste">Juste</span><span class="v-fausse">Fausse (cochée à tort)</span><span class="v-oubliee">Oubliée</span></div>

@@ -159,7 +159,7 @@ export async function parsePackage(files){
   else if(/^(qti-)?(assessment-?[tT]est|test-?[pP]art|assessment-?[sS]ection)$/.test(doc.documentElement.localName)){
    const refs=all(doc,ver==='3.0'?'qti-assessment-item-ref':'assessmentItemRef');
    const sec=one(doc,ver==='3.0'?'qti-assessment-section':'assessmentSection');
-   tests.push({titre:sec?.getAttribute('title')||doc.documentElement.getAttribute('title')||'',lineaire:doc.documentElement.getAttribute(ver==='3.0'?'navigation-mode':'navigationMode')==='linear',refs:refs.map(r=>({id:r.getAttribute('identifier'),href:r.getAttribute('href')||''}))});
+   tests.push({titre:sec?.getAttribute('title')||doc.documentElement.getAttribute('title')||'',lineaire:doc.documentElement.getAttribute(ver==='3.0'?'navigation-mode':'navigationMode')==='linear',refs:refs.map(r=>({id:r.getAttribute('identifier'),href:r.getAttribute('href')||'',poids:parseFloat(one(r,ver==='3.0'?'qti-weight':'weight')?.getAttribute('value'))||null}))});
    for(const r of refs){const h=joinPath(path,r.getAttribute('href'));if(!entries.includes(h)&&files[h]!==undefined)entries.push(h)}
   }else{questions.push(parseItem2(doc.documentElement,ctx,ver));if(ctx.escaped)escaped=true}
  }
@@ -172,7 +172,7 @@ export async function parsePackage(files){
   info(`Dossier « ${t.titre} » : ${t.refs.length} questions${t.lineaire?' dans un ordre imposé':''}${m?`, promo ${m[1]} lue dans le titre`:''}`);
   if(miss.length)err(`Questions du dossier absentes des fichiers déposés : ${miss.map(r=>r.href||r.id).join(', ')}`);
   const got=found.filter(Boolean);
-  got.forEach((q,i)=>{q.dossier={titre:t.titre,rang:i+1,total:got.length,promo:m?m[1]:null,matiere:mat||null};if(mat)q.meta.matiere=mat});
+  got.forEach((q,i)=>{const r=t.refs[found.indexOf(q)];if(r?.poids)q.coefficient=r.poids;q.dossier={titre:t.titre,rang:i+1,total:got.length,promo:m?m[1]:null,matiere:mat||null};if(mat)q.meta.matiere=mat});
   const rest=questions.filter(q=>!got.includes(q));questions.splice(0,questions.length,...got,...rest);
   /* énoncé commun = début de la 1re question, avant « Q1 : » */
   if(got[0]&&got[0].enonce){const k=got[0].enonce.search(/Q1\s*:/);if(k>40){const box=document.createElement('div');box.innerHTML=got[0].enonce;const tx=box.textContent;const cut=tx.search(/Q1\s*:/);got.forEach(q=>q.dossier.contexte=tx.slice(0,cut).trim())}}
@@ -187,7 +187,7 @@ export async function parsePackage(files){
   else if((q.type==='QRU'||q.type==='QRM')&&!q.propositions.some(p=>p.correcte))warn(`${q.id} : aucune proposition marquée juste`);
   else if(q.type==='QRU'&&q.propositions.filter(p=>p.correcte).length>1)warn(`${q.id} : QRU avec plusieurs bonnes réponses`);
  }
- const ok=questions.filter(q=>['QRU','QRM','QROC'].includes(q.type)).length;
+ const ok=questions.filter(q=>['QRU','QRM','QRP','QROC'].includes(q.type)).length;
  if(questions.length)msgs.unshift({k:ok===questions.length?'i':'w',m:`${ok} question${ok>1?'s':''} importable${ok>1?'s':''} sur ${questions.length}`});
  return {questions,versions:[...versions],msgs,images};
 }
@@ -226,11 +226,16 @@ export function versDossiers(questions) {
       parTitre.set(titre, d);
       dossiers.push(d);
     }
+    // QRP : nombre de cases limité (maxChoices) sous le nombre de propositions.
     // Théia type tout en QRM : une seule bonne réponse → QRU (règle du cahier des charges).
-    const type = q.type === 'QRM' && q.propositions.filter((p) => p.correcte).length === 1 ? 'QRU' : q.type;
+    const nbBonnes = q.propositions.filter((p) => p.correcte).length;
+    const qrp = q.type === 'QRM' && q.maxChoix > 1 && q.maxChoix < q.propositions.length;
+    const type = qrp ? 'QRP' : q.type === 'QRM' && nbBonnes === 1 ? 'QRU' : q.type;
     d.questions.push({
       qti_id: q.id,
       type,
+      nb_reponses: qrp ? q.maxChoix : null,
+      coefficient: Math.max(1, Math.round(q.coefficient || 1)),
       enonce: q.enonce || '',
       propositions: q.propositions.map((p) => ({ id: p.id, texte: p.texte })),
       correction: {

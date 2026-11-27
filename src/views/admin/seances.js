@@ -133,6 +133,7 @@ export async function vueAdminSeance(app, { id, copie, epreuve }) {
           <form id="f-doc" class="grille-2">
             <label class="champ"><span>Type</span><select name="type">${s.epreuve ? html`<option value="sujet">Sujet</option>` : ''}<option value="support">Support</option><option value="correction">${s.epreuve ? 'Correction' : 'Diapos de correction'}</option></select></label>
             <label class="champ"><span>Fichier PDF</span><input type="file" name="fichier" accept="application/pdf" required></label>
+            ${s.epreuve ? html`<p class="aide">Les étudiants voient le sujet dès le début de leur épreuve et la correction seulement après sa fin.</p>` : ''}
             <button class="btn contour" type="submit">Déposer</button>
           </form>
         </section>`}
@@ -152,7 +153,17 @@ export async function vueAdminSeance(app, { id, copie, epreuve }) {
       const lieu = d.get('lieu') === '__autre' ? String(d.get('lieu_autre')).trim() : d.get('lieu');
       const promos = d.getAll('promos').filter((p) => CODES_PROMOS.includes(p));
       erreur.hidden = true;
-      const probleme = !promos.length ? 'Cochez au moins une promo.' : finD <= debut ? "L'heure de fin doit être après l'heure de début." : '';
+      const groupesCoches = d.getAll('groupes').filter((gid) => promos.includes(groupes.find((g) => g.id === gid)?.promo));
+      // Une épreuve passée par plusieurs groupes doit cibler son groupe : sinon
+      // toute la promo verrait le sujet et la correction dès le premier groupe.
+      const serieMultiGroupes = d.has('epreuve') && (copie || s.serie);
+      const probleme = !promos.length
+        ? 'Cochez au moins une promo.'
+        : finD <= debut
+          ? "L'heure de fin doit être après l'heure de début."
+          : serieMultiGroupes && !groupesCoches.length
+            ? 'Cette épreuve est passée par plusieurs groupes : cochez le groupe concerné.'
+            : '';
       if (probleme) {
         erreur.textContent = probleme;
         erreur.hidden = false;
@@ -170,11 +181,11 @@ export async function vueAdminSeance(app, { id, copie, epreuve }) {
         annulee: d.has('annulee'),
         promos,
         // Un groupe n'est gardé que si sa promo est cochée.
-        groupes: d.getAll('groupes').filter((gid) => promos.includes(groupes.find((g) => g.id === gid)?.promo)),
+        groupes: groupesCoches,
         replay_url: String(d.get('replay_url')).trim() || null,
         replay_duree_min: d.get('replay_duree_min') ? Number(d.get('replay_duree_min')) : null,
       };
-      if (copie && donnees.epreuve) Object.assign(donnees, { serie: s.serie, correction_publiee: !!s.correction_publiee });
+      if (copie && donnees.epreuve) Object.assign(donnees, { serie: s.serie, correction_publiee: !!s.correction_publiee, publication: s.publication || 'cloture', publication_le: s.publication_le || null });
       // Changement de salle, d'horaire ou annulation : signalé aux étudiants.
       if (!nouvelle) {
         const change =
@@ -194,8 +205,14 @@ export async function vueAdminSeance(app, { id, copie, epreuve }) {
 
     el.addEventListener('click', async (e) => {
       if (e.target.closest('[data-action=supprimer]') && confirm(`Supprimer définitivement cette ${nom} et ses documents ?`)) {
-        for (const doc of docs) await app.api.supprimerDocument(doc);
-        await app.api.supprimerSeance(s.id);
+        try {
+          // La séance d'abord : la base refuse si des copies en dépendent, et
+          // les documents ne sont alors pas perdus.
+          await app.api.supprimerSeance(s.id);
+        } catch (err) {
+          return app.message(err.message, 'erreur');
+        }
+        for (const doc of docs) await app.api.supprimerDocument(doc).catch(() => {});
         app.naviguer(retour.slice(2));
       }
       const idDoc = e.target.closest('[data-suppr-doc]')?.dataset.supprDoc;

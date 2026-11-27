@@ -10,6 +10,7 @@
 //      2 lettres dès 12), sans chiffres, avec les 4 premières et les 3 dernières
 //      lettres identiques (évite hypo/hyper, -ite/-ose) et sans négation ajoutée ou retirée.
 // Une réponse que l'équipe a refusée reste fausse, même si elle est proche.
+// Une réponse que l'équipe a jugée « acceptable » (partielles) vaut 0,5 point.
 
 export const MOTS_VIDES = ['le', 'la', 'les', 'l', 'un', 'une', 'des', 'de', 'du', 'd', 'au', 'aux', 'a', 'en', 'et', 'par', 'pour', 'avec', 'sur'];
 // Expressions ramenées à un seul mot (avant le découpage en mots).
@@ -79,11 +80,12 @@ const nombres = (k) => mots(k).filter((m) => /^\d+(\.\d+)?$/.test(m));
 const memesMots = (a, b) => mots(a).sort().join(' ') === mots(b).sort().join(' ');
 const negation = (k) => mots(k).some((m) => NEGATIONS.includes(m));
 
-// → { juste, mode: 'exact' | 'approche' | 'faux' | 'refusee' | 'vide', acceptee }
-export function corrigerQroc(texte, acceptees = [], refusees = []) {
+// → { juste, mode: 'exact' | 'approche' | 'partielle' | 'faux' | 'refusee' | 'vide', acceptee }
+export function corrigerQroc(texte, acceptees = [], refusees = [], partielles = []) {
   const t = cle(texte);
   if (!t) return { juste: false, mode: 'vide' };
   if ((refusees || []).some((r) => cle(r) === t)) return { juste: false, mode: 'refusee' };
+  if ((partielles || []).some((r) => cle(r) === t)) return { juste: false, mode: 'partielle' };
   const cles = (acceptees || []).map((a) => [a, cle(a)]).filter(([, k]) => k);
   for (const [a, k] of cles) if (k === t || memesMots(k, t)) return { juste: true, mode: 'exact', acceptee: a };
   for (const [a, k] of cles) {

@@ -4,8 +4,8 @@
 import { html, brut } from '../lib/html.js';
 import { icones } from '../lib/icones.js';
 import { dateCourte } from '../lib/dates.js';
-import { points, formatNote, noteSur20 } from '../lib/bareme.js';
-import { serieDe, aPlat, lettre, htmlQcm, chargerImages, LIBELLES_TYPES } from '../lib/qcm.js';
+import { points, formatNote, noteSur20, pointsPonderes, coefficient } from '../lib/bareme.js';
+import { serieDe, aPlat, lettre, htmlQcm, chargerImages, LIBELLES_TYPES, noterCopie } from '../lib/qcm.js';
 import { enTete, vide } from './commun.js';
 import { questionCorrigee } from './qcm-rendu.js';
 
@@ -105,6 +105,7 @@ export async function vueRejouer(app, { id }) {
         <div data-question>
           <header class="q-bandeau"><span>Question ${q.num}</span><span>${LIBELLES_TYPES[q.type]}</span></header>
           <div class="q-enonce">${brut(htmlQcm(q.enonce))}</div>
+          ${q.type === 'QRP' ? html`<p class="alerte">${q.nb_reponses} réponses attendues : pas plus de ${q.nb_reponses} cases.</p>` : ''}
           ${q.type === 'QROC'
             ? html`<label class="champ"><span>Votre réponse</span><input class="qroc" data-qroc maxlength="500" autocomplete="off" value="${r.texte}"></label>`
             : html`<fieldset class="propositions"><legend class="sr">Propositions</legend>${q.propositions.map(
@@ -135,9 +136,7 @@ export async function vueRejouer(app, { id }) {
     };
 
     const fin = async () => {
-      const pts = questions.reduce((a, q) => a + points(q, corrections[q.id], reponses[q.id]), 0);
-      const total = questions.length;
-      const note = noteSur20(pts, total);
+      const { points: pts, total, note20: note } = noterCopie(questions, corrections, reponses);
       try {
         await app.api.enregistrerEntrainement(s.id, reponses, Math.round(pts * 100) / 100, total);
       } catch (err) {
@@ -148,8 +147,9 @@ export async function vueRejouer(app, { id }) {
         <div class="note-grande"><strong>${formatNote(note)}</strong><span>/ 20</span></div>
         <p>${formatNote(Math.round(pts * 100) / 100)} point${pts > 1 ? 's' : ''} sur ${total}.</p>
         <ul class="liste-simple">${questions.map((q) => {
-          const p = points(q, corrections[q.id], reponses[q.id]);
-          return html`<li>${q.dossier.titre} · Q${q.qi + 1} : <strong class="${p === 1 ? 'c-ok' : p > 0 ? '' : 'c-ko'}">${formatNote(p)}</strong></li>`;
+          const p = pointsPonderes(q, corrections[q.id], reponses[q.id]);
+          const max = coefficient(q);
+          return html`<li>${q.dossier.titre} · Q${q.qi + 1} : <strong class="${p === max ? 'c-ok' : p > 0 ? '' : 'c-ko'}">${formatNote(Math.round(p * 100) / 100)}</strong>${max !== 1 ? ` / ${max}` : ''}${q.statut === 'annulee' ? ' (annulée)' : ''}</li>`;
         })}</ul>
         <div class="actions">
           <button class="btn plein" data-depart="tout">Recommencer</button>
@@ -159,6 +159,14 @@ export async function vueRejouer(app, { id }) {
       window.scrollTo(0, 0);
     };
 
+    // QRP : pas plus de n cases.
+    el.addEventListener('change', (e) => {
+      const q = questions[i];
+      if (e.target.name === 'p' && q?.type === 'QRP' && e.target.checked && zone.querySelectorAll('input[name=p]:checked').length > (q.nb_reponses || 99)) {
+        e.target.checked = false;
+        app.message(`${q.nb_reponses} réponses attendues : décochez une case avant d'en cocher une autre.`, 'erreur');
+      }
+    });
     el.addEventListener('click', (e) => {
       const b = e.target.closest('[data-depart],[data-action]');
       if (!b) return;
