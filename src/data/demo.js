@@ -317,6 +317,14 @@ export function creerBackendDemo() {
       const p = profil();
       return db.seances.filter((s) => peutVoirSeance(p, s)).sort((a, b) => a.debut.localeCompare(b.debut));
     },
+    async planningGlobal(debut, fin) {
+      exiger((p) => !!p);
+      const nom = (gid) => db.groupes.find((g) => g.id === gid)?.nom || '';
+      return db.seances
+        .filter((x) => x.epreuve && (x.categorie || 'conference') === 'conference' && !x.annulee && x.debut < fin && x.fin > debut)
+        .sort((a, b) => a.debut.localeCompare(b.debut) || a.titre.localeCompare(b.titre))
+        .map((x) => ({ titre: x.titre, debut: x.debut, fin: x.fin, promos: x.promos, groupes: x.groupes.map(nom).filter(Boolean).sort().join(', '), salle: x.lieu }));
+    },
     async seance(id) {
       const s = db.seances.find((x) => x.id === id);
       return s && peutVoirSeance(profil(), s) ? s : null;

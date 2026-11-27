@@ -914,3 +914,26 @@ $$;
 drop trigger if exists proteger_questions on public.questions;
 create trigger proteger_questions before delete on public.questions
   for each row execute function public.proteger_questions();
+
+-- ---------------------------------------------------------------------
+-- Planning global (Accueil) : les épreuves de toutes les promos et de tous
+-- les groupes, pour savoir quelles salles sont occupées. Seuls l'intitulé,
+-- l'horaire, le groupe et la salle sortent : ni QCM, ni documents, ni liens.
+-- Période limitée à 3 mois par appel.
+-- ---------------------------------------------------------------------
+create or replace function public.planning_global(p_debut timestamptz, p_fin timestamptz)
+returns table (titre text, debut timestamptz, fin timestamptz, promos text[], groupes text, salle text)
+language sql stable security definer set search_path = public
+as $$
+  select s.titre, s.debut, s.fin, s.promos,
+         coalesce((select string_agg(g.nom, ', ' order by g.nom) from public.groupes g where g.id = any (s.groupes)), ''),
+         s.lieu
+  from public.seances s
+  where public.est_actif()
+    and s.epreuve and s.categorie = 'conference' and not s.annulee
+    and s.debut < p_fin and s.fin > p_debut
+    and p_fin - p_debut <= interval '93 days'
+  order by s.debut, s.titre
+$$;
+revoke execute on function public.planning_global(timestamptz, timestamptz) from public, anon;
+grant execute on function public.planning_global(timestamptz, timestamptz) to authenticated;

@@ -94,6 +94,27 @@ describe('inscription', () => {
   });
 });
 
+describe('planning global (salles occupées)', () => {
+  it('un étudiant voit les épreuves de tous les groupes et promos, sans autre champ', async () => {
+    await db.query(
+      `insert into seances (titre, debut, fin, promos, groupes, lieu, epreuve) values
+       ('Épreuve groupe B', now(), now() + interval '2 hours', '{D2}', array[$1]::uuid[], 'Salle 2', true),
+       ('Épreuve D3', now(), now() + interval '2 hours', '{D3}', '{}', 'Salle 3', true)`,
+      [ids.gB]
+    );
+    const r = await en(ids.camille, `select * from planning_global(now() - interval '1 day', now() + interval '1 day')`);
+    expect(r.map((x) => [x.titre, x.groupes, x.salle])).toEqual([
+      ['Épreuve D3', '', 'Salle 3'],
+      ['Épreuve groupe B', 'B', 'Salle 2'],
+    ]);
+    expect(Object.keys(r[0]).sort()).toEqual(['debut', 'fin', 'groupes', 'promos', 'salle', 'titre']);
+    await db.query(`delete from seances where titre in ('Épreuve groupe B', 'Épreuve D3')`);
+  });
+  it('refusé sans compte et limité à 3 mois', async () => {
+    expect(await en(null, `select * from planning_global(now() - interval '1 day', now() + interval '1 day')`)).toEqual([]);
+  });
+});
+
 describe('cloisonnement du planning', () => {
   const titres = async (uid) => (await en(uid, 'select titre from seances order by titre')).map((r) => r.titre);
 

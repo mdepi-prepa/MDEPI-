@@ -52,6 +52,10 @@ export function creerBackendSupabase(url, cleAnon) {
     async seances() {
       return verifier(await sb.from('seances').select('*').order('debut'));
     },
+    // Épreuves de tous les groupes (intitulé, horaire, groupe, salle).
+    async planningGlobal(debut, fin) {
+      return verifier(await sb.rpc('planning_global', { p_debut: debut, p_fin: fin }));
+    },
     async seance(id) {
       return verifier(await sb.from('seances').select('*').eq('id', id).maybeSingle());
     },

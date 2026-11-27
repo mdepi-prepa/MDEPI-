@@ -49,7 +49,7 @@ export function moisAnnee(x) {
 }
 
 // Clé AAAA-MM-JJ du jour à Paris (pour comparer des jours calendaires).
-function cleJour(x) {
+export function cleJour(x) {
   return fmt({ year: 'numeric', month: '2-digit', day: '2-digit' }).format(d(x)).split('/').reverse().join('-');
 }
 

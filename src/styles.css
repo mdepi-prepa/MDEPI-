@@ -530,3 +530,31 @@ body.mode-epreuve #contenu > .passage { max-width: 1100px; margin: 0 auto; }
 .sommaire-note.moyen { background: var(--orange-fond); color: var(--orange); }
 .sommaire-note.faible { background: var(--faux-fond); color: var(--faux); }
 .dossier-corr { scroll-margin-top: 16px; }
+
+/* Accueil › Planning global (calendrier des épreuves de tous les groupes) */
+.calendrier { display: flex; flex-direction: column; gap: 12px; }
+.cal-haut { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.cal-haut strong { font-size: 15px; }
+.cal-haut .btn-icone { font-size: 20px; line-height: 1; }
+.cal-grille { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.cal-entete { text-align: center; font-size: 11px; font-weight: 600; color: var(--encre-3); padding-bottom: 2px; }
+.cal-jour {
+  position: relative; aspect-ratio: 1 / 1; min-height: 36px; border: 1px solid transparent; border-radius: 10px;
+  background: none; font: inherit; font-size: 13px; color: var(--encre); cursor: pointer; transition: background var(--transition);
+  display: flex; align-items: center; justify-content: center;
+}
+.cal-jour:hover { background: var(--bord-2); }
+.cal-jour.occupe { background: var(--accent-doux); font-weight: 600; }
+.cal-jour.aujourdhui { border-color: var(--encre); }
+.cal-jour.choisi { background: var(--encre); color: #fff; }
+.cal-nb {
+  position: absolute; top: 2px; right: 3px; min-width: 15px; height: 15px; padding: 0 3px; border-radius: 999px;
+  background: var(--accent); color: #fff; font-size: 10px; line-height: 15px; font-weight: 700;
+}
+.cal-jour.choisi .cal-nb { background: #fff; color: var(--encre); }
+.cal-detail { border-top: 1px solid var(--bord-2); padding-top: 10px; display: flex; flex-direction: column; gap: 8px; }
+.cal-liste { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.cal-liste li { display: flex; gap: 12px; padding: 8px 0; align-items: baseline; }
+.cal-liste li + li { border-top: 1px solid var(--bord-2); }
+.cal-heure { flex: none; width: 92px; font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+@media (min-width: 900px) { .cal-jour { aspect-ratio: auto; height: 44px; } }

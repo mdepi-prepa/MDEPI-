@@ -6,6 +6,7 @@ import { dateLongue, plageHoraire, compteARebours, ilYA } from '../lib/dates.js'
 import { estEquipe } from '../lib/acces.js';
 import { badgePromo, boutonZoom, vide } from './commun.js';
 import { qcmLibre } from '../lib/qcm.js';
+import { sectionPlanningGlobal, monterPlanningGlobal } from './planning-global.js';
 
 export async function vueAccueil(app) {
   const p = app.profil;
@@ -61,6 +62,8 @@ export async function vueAccueil(app) {
           ${icones.chevron(16)}</a>`
       : ''}
 
+    ${sectionPlanningGlobal()}
+
     <section class="pile-petite">
       <h2 class="titre-section">Bientôt dans l'app</h2>
       <div class="grille-2">
@@ -89,5 +92,5 @@ export async function vueAccueil(app) {
     ${estEquipe(p) ? html`<a href="#/admin" class="carte lien-ligne">${icones.outils(18)}<span>Ouvrir le back-office</span>${icones.chevron(16)}</a>` : ''}
   </div>`;
 
-  return { html: vue, titre: 'Accueil' };
+  return { html: vue, titre: 'Accueil', monter: (el) => monterPlanningGlobal(el, app) };
 }
