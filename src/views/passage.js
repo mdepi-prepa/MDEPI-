@@ -164,6 +164,7 @@ async function passage(app, s, copie) {
     <header class="passage-haut">
       <a class="btn-icone" href="#/epreuves" aria-label="Quitter (vos réponses sont gardées)">${icones.retour(20)}</a>
       <div class="pile-mini passage-titre"><strong>${s.titre}</strong><span class="aide" data-statut>Réponses enregistrées</span></div>
+      <a class="btn-icone" href="#/" aria-label="Revenir à l'accueil (vos réponses sont gardées)" title="Revenir à l'accueil">${icones.accueil(20)}</a>
       <div class="chrono" data-chrono title="Temps restant">${chrono(new Date(s.fin) - new Date())}</div>
     </header>
     <div class="passage-corps">
@@ -274,9 +275,29 @@ async function passage(app, s, copie) {
       const fige = r.validee;
       const type = q.type === 'QRU' ? 'radio' : 'checkbox';
       const suivante = questions[courant + 1];
+      // Questions précédentes du dossier, en lecture seule : on remonte en
+      // défilant pour les relire (la question en cours est en dessous).
+      const avant = questions.filter((x) => x.di === q.di && x.qi < q.qi && !x.verrouillee);
       zoneQ.innerHTML = String(html`
-        <p class="surtitre">${q.dossier.titre} · question ${q.qi + 1} sur ${q.dossier.questions.length}</p>
-        ${q.qi > 0
+        ${avant.length
+          ? html`<div class="q-precedentes">${avant.map((x) => {
+              const rx = rep(x);
+              return html`<article class="q-precedente">
+                <header class="q-bandeau"><span>Question ${x.num}</span><span>${rx.validee ? 'Validée' : LIBELLES_TYPES[x.type]}</span></header>
+                <div class="q-enonce">${brut(htmlQcm(x.enonce))}</div>
+                ${x.type === 'QROC'
+                  ? html`<p class="q-reponse-qroc"><span class="aide">Votre réponse : </span>${rx.texte || '(sans réponse)'}</p>`
+                  : html`<fieldset class="propositions" disabled><legend class="sr">Propositions</legend>${x.propositions.map(
+                      (p, i) => html`<label class="prop">
+                        <input type="${x.type === 'QRU' ? 'radio' : 'checkbox'}" ${(rx.choix || []).includes(p.id) ? 'checked' : ''}>
+                        <span class="lettre">${lettre(i)}</span><span class="prop-texte">${brut(htmlQcm(p.texte))}</span>
+                      </label>`
+                    )}</fieldset>`}
+              </article>`;
+            })}</div>`
+          : ''}
+        <p class="surtitre" data-q-courante>${q.dossier.titre} · question ${q.qi + 1} sur ${q.dossier.questions.length}</p>
+        ${q.qi > 0 && avant.length < q.qi
           ? html`<details class="rappel"><summary>Relire l'énoncé du dossier</summary><div class="q-enonce">${brut(htmlQcm(q.dossier.questions[0].enonce))}</div></details>`
           : ''}
         <header class="q-bandeau"><span>Question ${q.num}</span><span>${LIBELLES_TYPES[q.type]}</span></header>
@@ -321,7 +342,7 @@ async function passage(app, s, copie) {
       dessinerQuestion();
       // On amène la question elle-même en haut de l'écran (sur téléphone, le
       // sommaire est au-dessus : il ne faut pas y remonter).
-      zoneQ.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      (zoneQ.querySelector('[data-q-courante]') || zoneQ).scrollIntoView({ block: 'start', behavior: 'smooth' });
     }
 
     // --- Résumé et envoi final ---

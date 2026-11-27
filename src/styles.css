@@ -104,6 +104,12 @@ code { background: var(--gris); padding: 1px 5px; border-radius: 5px; font-size:
 
 /* ---------- Titres ---------- */
 .entete { display: flex; align-items: center; gap: 12px; min-height: 44px; }
+.entete .btn-accueil { margin-left: auto; }
+.q-precedentes { display: flex; flex-direction: column; gap: 20px; padding-bottom: 20px; margin-bottom: 4px; border-bottom: 1px dashed var(--bord-2); }
+.q-precedente { display: flex; flex-direction: column; gap: 12px; opacity: .78; }
+.q-precedente .q-bandeau { background: var(--bord-2); color: var(--encre); }
+.q-reponse-qroc { margin: 0; }
+[data-q-courante] { scroll-margin-top: 90px; }
 .titre-page { font: 700 28px/1.1 var(--titres); letter-spacing: -0.02em; flex: 1; min-width: 0; overflow-wrap: break-word; }
 @media (max-width: 480px) { .titre-page { font-size: 25px; } }
 .titre-section { font: 600 16px/1.3 var(--titres); letter-spacing: -0.005em; }

@@ -13,6 +13,7 @@ export function enTete(titre, profil, retour) {
     ${retour ? html`<a class="btn-icone" href="${retour}" aria-label="Retour">${icones.retour(20)}</a>` : ''}
     <h1 class="titre-page">${titre}</h1>
     ${profil ? badgePromo(profil) : ''}
+    ${retour && retour !== '#/' ? html`<a class="btn-icone btn-accueil" href="#/" aria-label="Revenir à l'accueil" title="Revenir à l'accueil">${icones.accueil(20)}</a>` : ''}
   </header>`;
 }
 
