@@ -22,6 +22,7 @@ import { vueAdminEpreuves } from './views/admin/epreuves.js';
 import { vuePassage, vueMaCorrection } from './views/passage.js';
 import { vueEntrainement, vueRejouer } from './views/entrainement.js';
 import { vueAdminQcm, vueAdminCorrige, vueAdminResultats, vueAdminCopie, vueAdminQroc } from './views/admin/qcm.js';
+import { vueAdminSaisie } from './views/admin/saisie.js';
 
 // Table des écrans : #/chemin → fonction d'affichage.
 const ROUTES = [
@@ -46,6 +47,7 @@ const ROUTES = [
   ['admin/epreuves', vueAdminEpreuves, 'equipe'],
   ['admin/epreuves/nouvelle', (app) => vueAdminSeance(app, { id: 'nouvelle', epreuve: true }), 'equipe'],
   ['admin/epreuves/:id/qcm', vueAdminQcm, 'equipe'],
+  ['admin/epreuves/:id/saisie', vueAdminSaisie, 'equipe'],
   ['admin/epreuves/:id/corrige', vueAdminCorrige, 'equipe'],
   ['admin/epreuves/:id/resultats', vueAdminResultats, 'equipe'],
   ['admin/epreuves/:id/qroc', vueAdminQroc, 'equipe'],

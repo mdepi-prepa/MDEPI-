@@ -7,6 +7,7 @@ import { corrigerQroc } from '../lib/qroc.js';
 import { QCM_DEMO } from './demo-qcm.js';
 
 const CLE = 'mdepi-demo-v7';
+const DEJA_COMMENCE = 'Des étudiants ont déjà commencé cette épreuve : on ne peut plus ajouter ni retirer de question (les corrections restent modifiables).';
 export const CODE_DEMO = '123456';
 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2));
@@ -397,6 +398,77 @@ export function creerBackendDemo() {
     },
     async supprimerQcm(seanceId) {
       await this.importerQcm(seanceId, []);
+    },
+
+    // ---------- Saisie manuelle d'un QCM ----------
+    async qcmCommence(seanceId) {
+      const s = await this.seance(seanceId);
+      const ids = new Set(db.seances.filter((x) => serieDe(x) === serieDe(s)).map((x) => x.id));
+      return db.copies.some((c) => ids.has(c.seance_id));
+    },
+    async creerDossier(seanceId, { titre, matiere }) {
+      exiger(estEquipe);
+      if (await this.qcmCommence(seanceId)) throw new Error(DEJA_COMMENCE);
+      const serie = serieDe(await this.seance(seanceId));
+      const autres = db.dossiers.filter((d) => d.serie_id === serie);
+      if (autres.some((d) => d.titre === titre)) throw new Error('Un dossier porte déjà ce titre dans cette épreuve.');
+      const d = { id: uid(), serie_id: serie, titre, matiere: matiere || '', contexte: '', ordre: autres.length ? Math.max(...autres.map((x) => x.ordre)) + 1 : 0 };
+      db.dossiers.push(d);
+      sauver();
+      return d;
+    },
+    async modifierDossier(dossierId, champs) {
+      exiger(estEquipe);
+      const d = db.dossiers.find((x) => x.id === dossierId);
+      if (champs.titre && db.dossiers.some((x) => x.id !== dossierId && x.serie_id === d.serie_id && x.titre === champs.titre)) throw new Error('Un dossier porte déjà ce titre dans cette épreuve.');
+      Object.assign(d, champs);
+      sauver();
+    },
+    async supprimerDossier(seanceId, dossierId) {
+      exiger(estEquipe);
+      if (await this.qcmCommence(seanceId)) throw new Error(DEJA_COMMENCE);
+      db.questions.filter((q) => q.dossier_id === dossierId).forEach((q) => delete db.corrections[q.id]);
+      db.questions = db.questions.filter((q) => q.dossier_id !== dossierId);
+      db.dossiers = db.dossiers.filter((d) => d.id !== dossierId);
+      sauver();
+    },
+    async enregistrerQuestionSaisie(seanceId, dossierId, questionId, q, correction) {
+      exiger(estEquipe);
+      const champs = { type: q.type, enonce: q.enonce, propositions: q.propositions, nb_reponses: q.nb_reponses || null, coefficient: q.coefficient || 1 };
+      const vierge = { refusees_qroc: [], partielles_qroc: [], indispensables: [], inacceptables: [], reponses_qroc: [], bonnes: [], explications: {}, commentaire: '' };
+      if (questionId) {
+        Object.assign(db.questions.find((x) => x.id === questionId), champs);
+        db.corrections[questionId] = { ...vierge, ...db.corrections[questionId], ...correction, question_id: questionId };
+        sauver();
+        return { id: questionId };
+      }
+      if (await this.qcmCommence(seanceId)) throw new Error(DEJA_COMMENCE);
+      const d = db.dossiers.find((x) => x.id === dossierId);
+      const freres = db.questions.filter((x) => x.dossier_id === dossierId);
+      const cree = { ...champs, id: uid(), serie_id: d.serie_id, dossier_id: dossierId, qti_id: 'SAISIE-' + uid(), ordre: freres.length ? Math.max(...freres.map((x) => x.ordre)) + 1 : d.ordre * 1000, statut: 'normale' };
+      db.questions.push(cree);
+      db.corrections[cree.id] = { ...vierge, ...correction, question_id: cree.id };
+      sauver();
+      return cree;
+    },
+    async supprimerQuestionSaisie(seanceId, questionId) {
+      exiger(estEquipe);
+      if (await this.qcmCommence(seanceId)) throw new Error(DEJA_COMMENCE);
+      db.questions = db.questions.filter((q) => q.id !== questionId);
+      delete db.corrections[questionId];
+      sauver();
+    },
+    async ajouterImageQcm(seanceId, fichier) {
+      exiger(estEquipe);
+      const serie = serieDe(await this.seance(seanceId));
+      const nom = `qcm/${serie}/s${Date.now()}`;
+      db.images[nom] = await new Promise((ok) => {
+        const r = new FileReader();
+        r.onload = () => ok(r.result);
+        r.readAsDataURL(fichier);
+      });
+      sauver();
+      return nom;
     },
     async modifierCorrection(questionId, champs) {
       exiger(estEquipe);

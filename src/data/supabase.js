@@ -4,6 +4,8 @@
 import { createClient } from '@supabase/supabase-js';
 import { serieDe, imagesUtilisees, nomImageStockage, renommerImages } from '../lib/qcm.js';
 
+const DEJA_COMMENCE = 'Des étudiants ont déjà commencé cette épreuve : on ne peut plus ajouter ni retirer de question (les corrections restent modifiables).';
+
 let urlServeur = '';
 
 export function creerBackendSupabase(url, cleAnon) {
@@ -136,6 +138,55 @@ export function creerBackendSupabase(url, cleAnon) {
     },
     async supprimerQcm(seanceId) {
       await this.importerQcm(seanceId, []);
+    },
+
+    // ---------- Saisie manuelle d'un QCM (question par question) ----------
+    async qcmCommence(seanceId) {
+      const ids = (await this.seancesSerie(seanceId)).map((x) => x.id);
+      const { count } = await sb.from('copies').select('id', { count: 'exact', head: true }).in('seance_id', ids);
+      return !!count;
+    },
+    async creerDossier(seanceId, { titre, matiere }) {
+      if (await this.qcmCommence(seanceId)) throw new Error(DEJA_COMMENCE);
+      const serie = serieDe(await this.seance(seanceId));
+      const der = verifier(await sb.from('dossiers').select('ordre').eq('serie_id', serie).order('ordre', { ascending: false }).limit(1));
+      return verifier(await sb.from('dossiers').insert({ serie_id: serie, titre, matiere: matiere || '', ordre: der.length ? der[0].ordre + 1 : 0 }).select().single());
+    },
+    async modifierDossier(dossierId, champs) {
+      verifier(await sb.from('dossiers').update(champs).eq('id', dossierId));
+    },
+    async supprimerDossier(seanceId, dossierId) {
+      if (await this.qcmCommence(seanceId)) throw new Error(DEJA_COMMENCE);
+      verifier(await sb.from('dossiers').delete().eq('id', dossierId));
+    },
+    // Crée (questionId vide) ou met à jour une question et sa correction.
+    async enregistrerQuestionSaisie(seanceId, dossierId, questionId, q, correction) {
+      const champs = { type: q.type, enonce: q.enonce, propositions: q.propositions, nb_reponses: q.nb_reponses || null, coefficient: q.coefficient || 1 };
+      if (questionId) {
+        verifier(await sb.from('questions').update(champs).eq('id', questionId));
+        verifier(await sb.from('corrections').upsert({ question_id: questionId, ...correction }));
+        return { id: questionId };
+      }
+      if (await this.qcmCommence(seanceId)) throw new Error(DEJA_COMMENCE);
+      const serie = serieDe(await this.seance(seanceId));
+      const d = verifier(await sb.from('dossiers').select('ordre').eq('id', dossierId).single());
+      const der = verifier(await sb.from('questions').select('ordre').eq('dossier_id', dossierId).order('ordre', { ascending: false }).limit(1));
+      const ordre = der.length ? der[0].ordre + 1 : d.ordre * 1000;
+      const cree = verifier(
+        await sb.from('questions').insert({ ...champs, serie_id: serie, dossier_id: dossierId, qti_id: 'SAISIE-' + crypto.randomUUID(), ordre }).select().single()
+      );
+      verifier(await sb.from('corrections').insert({ question_id: cree.id, ...correction }));
+      return cree;
+    },
+    async supprimerQuestionSaisie(seanceId, questionId) {
+      if (await this.qcmCommence(seanceId)) throw new Error(DEJA_COMMENCE);
+      verifier(await sb.from('questions').delete().eq('id', questionId));
+    },
+    async ajouterImageQcm(seanceId, fichier) {
+      const serie = serieDe(await this.seance(seanceId));
+      const nom = nomImageStockage(serie, fichier.name, 's' + Date.now());
+      verifier(await sb.storage.from('documents').upload(nom, fichier, { upsert: true, contentType: fichier.type || undefined }));
+      return nom;
     },
     async modifierCorrection(questionId, champs) {
       verifier(await sb.from('corrections').update(champs).eq('question_id', questionId));

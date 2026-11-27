@@ -74,6 +74,12 @@ export async function vueAdminQcm(app, { id }) {
       : ''}
 
     <section class="carte pile">
+      <h2 class="titre-section">Saisir les questions à la main</h2>
+      <p class="aide">Créez les DP, KFP et questions isolées, puis chaque question (QRU, QRM, QRP, QROC) avec sa correction. Chaque question est enregistrée une à une : vous pouvez reprendre plus tard. Sert aussi à corriger une question importée.</p>
+      <div class="actions"><a class="btn ${nbQ ? 'contour' : 'plein'}" href="#/admin/epreuves/${id}/saisie">${nbQ ? 'Modifier ou compléter les questions' : 'Saisir le QCM à la main'}</a></div>
+    </section>
+
+    <section class="carte pile">
       <h2 class="titre-section">${nbQ ? 'Remplacer le QCM' : 'Importer le QCM depuis Théia'}</h2>
       <p class="aide">Dans Théia, exportez les dossiers au format QTI 2.1, puis déposez ici le fichier ZIP (ou les fichiers XML). Les DP et KFP gardent leur ordre, les cases attendues, les QROC et les commentaires de correction.
         Le remplacement n'est plus possible dès qu'un étudiant a commencé.</p>
