@@ -155,3 +155,14 @@ export function questionCourte(h, max = 220) {
   const r = m ? m[0] : t;
   return r.length > max ? '… ' + r.slice(-max) : r;
 }
+
+// Rangement d'une épreuve dans Entraînement. Une conférence annuelle est une
+// épreuve notée à date fixe (planning, classement) ; un QCM d'entraînement ou
+// de coaching est disponible directement dans Entraînement, hors planning.
+export const CATEGORIES = {
+  conference: 'Conférences annuelles',
+  entrainement: "QCM d'entraînement",
+  coaching: 'QCM coaching',
+};
+export const categorieDe = (s) => s.categorie || 'conference';
+export const qcmLibre = (s) => !!s.epreuve && categorieDe(s) !== 'conference';

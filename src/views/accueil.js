@@ -5,10 +5,12 @@ import { logoCompact } from '../lib/logo.js';
 import { dateLongue, plageHoraire, compteARebours, ilYA } from '../lib/dates.js';
 import { estEquipe } from '../lib/acces.js';
 import { badgePromo, boutonZoom, vide } from './commun.js';
+import { qcmLibre } from '../lib/qcm.js';
 
 export async function vueAccueil(app) {
   const p = app.profil;
-  const [seances, annonces, lues] = await Promise.all([app.api.seances(), app.api.annonces(), app.api.annoncesLues()]);
+  const [toutes, annonces, lues] = await Promise.all([app.api.seances(), app.api.annonces(), app.api.annoncesLues()]);
+  const seances = toutes.filter((s) => !qcmLibre(s));
   const maintenant = new Date();
   const prochaine = seances.find((s) => !s.annulee && new Date(s.fin) > maintenant);
   const nonLues = annonces.filter((a) => !lues.has(a.id));

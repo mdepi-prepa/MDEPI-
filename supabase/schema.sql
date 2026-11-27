@@ -311,6 +311,12 @@ alter table public.seances add column if not exists correction_publiee boolean n
 -- étudiants), « cloture » (dès la fin de l'épreuve), « date » (à partir de publication_le).
 alter table public.seances add column if not exists publication text not null default 'cloture';
 alter table public.seances add column if not exists publication_le timestamptz;
+-- Rangement dans Entraînement : conférence annuelle (épreuve notée à date
+-- fixe, rejouable une fois finie), QCM d'entraînement ou QCM coaching
+-- (disponibles dans Entraînement dès leur date, avec la correction).
+alter table public.seances add column if not exists categorie text not null default 'conference';
+alter table public.seances drop constraint if exists seances_categorie_check;
+alter table public.seances add constraint seances_categorie_check check (categorie in ('conference', 'entrainement', 'coaching'));
 alter table public.seances drop constraint if exists seances_publication_check;
 alter table public.seances add constraint seances_publication_check check (publication in ('jamais', 'cloture', 'date'));
 
@@ -438,7 +444,8 @@ returns boolean language sql stable security definer set search_path = public as
   select public.est_equipe() or exists (
     select 1 from public.seances s
     where public.serie_de(s) = p_serie and public.peut_voir_seance(s) and not s.annulee
-      and (s.correction_publiee or public.resultats_publies(s)))
+      and (s.correction_publiee or public.resultats_publies(s)
+           or (s.categorie <> 'conference' and now() >= s.debut)))
 $$;
 
 create or replace function public.question_accessible(q public.questions)
@@ -678,7 +685,7 @@ returns uuid language plpgsql security definer set search_path = public as $$
 declare s public.seances; v uuid;
 begin
   select * into s from public.seances where id = p_seance;
-  if not found or not public.peut_voir_seance(s) or not s.epreuve then raise exception 'Épreuve introuvable'; end if;
+  if not found or not public.peut_voir_seance(s) or not s.epreuve or s.categorie <> 'conference' then raise exception 'Épreuve introuvable'; end if;
   select id into v from public.copies where seance_id = p_seance and user_id = auth.uid();
   if v is not null then return v; end if;
   if not public.epreuve_ouverte(s) then raise exception 'Épreuve fermée'; end if;

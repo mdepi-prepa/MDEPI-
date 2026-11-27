@@ -7,6 +7,7 @@ import { CODES_PROMOS, libellePromo } from '../../lib/promos.js';
 import { dateCourte, plageHoraire } from '../../lib/dates.js';
 import { enteteAdmin } from './index.js';
 import { vide } from '../commun.js';
+import { CATEGORIES, categorieDe } from '../../lib/qcm.js';
 
 export async function vueAdminEpreuves(app) {
   const [seances, groupes] = await Promise.all([app.api.seances(), app.api.groupes()]);
@@ -24,7 +25,7 @@ export async function vueAdminEpreuves(app) {
     <tbody>${liste.map(
       (s) => html`<tr class="${new Date(s.fin) <= maintenant ? 'passee' : ''}">
         <td>${dateCourte(s.debut)}<br><span class="aide">${plageHoraire(s.debut, s.fin)}</span></td>
-        <td><a href="#/admin/seances/${s.id}"><strong>${s.titre}</strong></a><br><span class="aide">${s.lieu}</span>
+        <td><a href="#/admin/seances/${s.id}"><strong>${s.titre}</strong></a><br><span class="aide">${categorieDe(s) === 'conference' ? s.lieu : CATEGORIES[categorieDe(s)] + ' · ' + (s.matiere || '')}</span>
           ${s.annulee ? html`<div class="etiquettes"><span class="etiquette annulee">Annulée</span></div>` : ''}</td>
         <td>${nomsGroupes(s)}</td>
         <td>${s._qcm

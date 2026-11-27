@@ -3,9 +3,10 @@ import { html, urlSure } from '../lib/html.js';
 import { icones } from '../lib/icones.js';
 import { grouperParMois, dateCourte, duree } from '../lib/dates.js';
 import { enTete, ligneSeance, vide } from './commun.js';
+import { qcmLibre } from '../lib/qcm.js';
 
 export async function vuePlanning(app, { onglet = 'avenir' } = {}) {
-  const seances = await app.api.seances();
+  const seances = (await app.api.seances()).filter((s) => !qcmLibre(s));
   const maintenant = new Date();
   // Une séance du jour (épreuve en cours ou juste finie comprise) reste dans
   // « À venir » jusqu'à minuit.

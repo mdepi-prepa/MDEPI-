@@ -5,11 +5,12 @@ import { icones } from '../lib/icones.js';
 import { dateLongue, dateCourte, plageHoraire, compteARebours } from '../lib/dates.js';
 import { estEquipe } from '../lib/acces.js';
 import { enTete, etiquettes, vide } from './commun.js';
+import { qcmLibre } from '../lib/qcm.js';
 
 export async function vueEpreuves(app) {
   const [seances, groupes] = await Promise.all([app.api.seances(), app.api.groupes().catch(() => [])]);
   const maintenant = new Date();
-  const epreuves = seances.filter((s) => s.epreuve);
+  const epreuves = seances.filter((s) => s.epreuve && !qcmLibre(s));
   const aVenir = epreuves.filter((s) => new Date(s.fin) > maintenant);
   const passees = epreuves.filter((s) => new Date(s.fin) <= maintenant).reverse();
   const nomsGroupes = (s) => s.groupes.map((id) => groupes.find((g) => g.id === id)?.nom).filter(Boolean);

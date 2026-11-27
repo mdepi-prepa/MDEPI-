@@ -430,3 +430,22 @@ describe('comptes', () => {
     ]);
   });
 });
+
+describe('QCM d’entraînement et de coaching', () => {
+  it('disponible avec sa correction dès sa date, sans copie d’épreuve ; refusé avant', async () => {
+    const [{ promo }] = (await db.query('select promo from profils where id = $1', [ids.leo])).rows;
+    const [e] = await en(ids.prof, `insert into seances (titre, debut, fin, promos, epreuve, categorie) values ('QCM entr.', now() - interval '1 minute', now() + interval '1 hour', array[$1], true, 'entrainement') returning id`, [promo]);
+    const [f] = await en(ids.prof, `insert into seances (titre, debut, fin, promos, epreuve, categorie) values ('QCM futur', now() + interval '1 day', now() + interval '1 day 1 hour', array[$1], true, 'coaching') returning id`, [promo]);
+    for (const s of [e, f]) {
+      const [d] = await en(ids.prof, `insert into dossiers (serie_id, titre) values ($1, 'QI') returning id`, [s.id]);
+      const [qq] = await en(ids.prof, `insert into questions (serie_id, dossier_id, qti_id, ordre, type, propositions) values ($1, $2, 'X', 1, 'QRU', '[{"id":"A"},{"id":"B"}]') returning id`, [s.id, d.id]);
+      await en(ids.prof, `insert into corrections (question_id, bonnes) values ($1, '{A}')`, [qq.id]);
+    }
+    expect((await en(ids.leo, 'select correction_visible from infos_qcm($1)', [e.id]))[0].correction_visible).toBe(true);
+    expect((await en(ids.leo, 'select correction_visible from infos_qcm($1)', [f.id]))[0].correction_visible).toBe(false);
+    await en(ids.leo, `insert into entrainements (serie_id, points, total) values ($1, 1, 1)`, [e.id]);
+    await expect(en(ids.leo, `insert into entrainements (serie_id, points, total) values ($1, 1, 1)`, [f.id])).rejects.toThrow();
+    await expect(en(ids.leo, 'select commencer_epreuve($1)', [e.id])).rejects.toThrow(/introuvable/);
+    await expect(en(ids.prof, `update seances set categorie = 'autre' where id = $1`, [e.id])).rejects.toThrow();
+  });
+});

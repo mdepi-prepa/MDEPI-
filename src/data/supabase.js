@@ -240,8 +240,16 @@ export function creerBackendSupabase(url, cleAnon) {
     },
     async enregistrerSeance(seance) {
       const { id, ...champs } = seance;
-      if (id) return verifier(await sb.from('seances').update(champs).eq('id', id).select().single());
-      return verifier(await sb.from('seances').insert(champs).select().single());
+      const ecrire = (c) => (id ? sb.from('seances').update(c).eq('id', id) : sb.from('seances').insert(c)).select().single();
+      let r = await ecrire(champs);
+      // Base pas encore mise à jour (colonne « categorie » absente) : une
+      // conférence s'enregistre quand même ; un QCM d'entraînement demande la mise à jour.
+      if (r.error && /categorie/.test(r.error.message || '')) {
+        if (champs.categorie && champs.categorie !== 'conference') throw new Error('Base à mettre à jour : relancez supabase/schema.sql dans Supabase (SQL Editor), puis réessayez.');
+        const { categorie, ...sans } = champs;
+        r = await ecrire(sans);
+      }
+      return verifier(r);
     },
     async supprimerSeance(id) {
       verifier(await sb.from('seances').delete().eq('id', id));

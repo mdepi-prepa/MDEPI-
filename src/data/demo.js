@@ -6,7 +6,7 @@ import { serieDe, noterCopie, imagesUtilisees, renommerImages, qrocACorriger } f
 import { corrigerQroc } from '../lib/qroc.js';
 import { QCM_DEMO } from './demo-qcm.js';
 
-const CLE = 'mdepi-demo-v6';
+const CLE = 'mdepi-demo-v7';
 export const CODE_DEMO = '123456';
 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2));
@@ -74,6 +74,7 @@ function donneesInitiales() {
     correction_publiee: false,
     publication: 'cloture',
     publication_le: null,
+    categorie: 'conference',
     ...extra,
   });
   const seances = [
@@ -113,6 +114,9 @@ function donneesInitiales() {
     }),
     s('Sémiologie cardiaque', 'Cardiologie', jour(3, 18, 30), jour(3, 20, 30), '90 rue Sainte-Cécile', { promos: ['D1'] }),
     s('Gynécologie : grossesse extra-utérine', 'Gynécologie Obstétrique', jour(2, 18, 30), jour(2, 21, 30), '94 rue Sainte-Cécile', { promos: ['D4'] }),
+    // QCM rangés directement dans Entraînement (hors planning).
+    s("QCM d'entraînement · cholestase", 'Gastro-entérologie', jour(-4, 8), jour(-4, 10), 'En ligne', { epreuve: true, zoom_url: null, categorie: 'entrainement' }),
+    s('QCM coaching · méthode des DP', 'Transversale', jour(-1, 8), jour(-1, 10), 'En ligne', { epreuve: true, zoom_url: null, categorie: 'coaching' }),
   ];
   const par = (debutTitre) => seances.find((x) => x.titre.startsWith(debutTitre));
   // CCB n°3 : même épreuve pour les groupes A et B (une série, un classement).
@@ -140,6 +144,8 @@ function donneesInitiales() {
   poser(ccb3A, QCM_DEMO.dp4);
 
   poser(partielA, [...QCM_DEMO.dp4, ...QCM_DEMO.kfp2]);
+  poser(par("QCM d'entraînement"), QCM_DEMO.kfp2);
+  poser(par('QCM coaching'), QCM_DEMO.dp4);
 
   // Copies fictives (réponses plus ou moins justes) des étudiants concernés.
   const semer = (seance, j, graine) => {
@@ -232,7 +238,8 @@ export function creerBackendDemo() {
   // Même règle que resultats_publies (schema.sql) : jamais, dès la fin, ou à partir d'une date.
   const finie = (x) => new Date() > new Date(new Date(x.fin).getTime() + 2 * 60000);
   const publies = (x) => finie(x) && ((x.publication || 'cloture') === 'cloture' || (x.publication === 'date' && !!x.publication_le && new Date() >= new Date(x.publication_le)));
-  const voirCorrection = (serie) => serieVisible(serie, (x) => !x.annulee && (x.correction_publiee || publies(x)));
+  const voirCorrection = (serie) =>
+    serieVisible(serie, (x) => !x.annulee && (x.correction_publiee || publies(x) || ((x.categorie || 'conference') !== 'conference' && new Date(x.debut) <= new Date())));
   const qrocEnAttente = (serie) => {
     const ids = new Set(db.seances.filter((x) => serieDe(x) === serie).map((x) => x.id));
     return qrocACorriger(db.questions.filter((q) => q.serie_id === serie), db.corrections, db.copies.filter((c) => ids.has(c.seance_id)).map((c) => ({ reponses: Object.values(c.reponses) })));
@@ -416,7 +423,7 @@ export function creerBackendDemo() {
     async commencerEpreuve(seanceId) {
       await pause();
       const s = db.seances.find((x) => x.id === seanceId);
-      if (!s || !peutVoirSeance(profil(), s) || !s.epreuve) throw new Error('Épreuve introuvable.');
+      if (!s || !peutVoirSeance(profil(), s) || !s.epreuve || (s.categorie || 'conference') !== 'conference') throw new Error('Épreuve introuvable.');
       const c = db.copies.find((x) => x.seance_id === seanceId && x.user_id === db.session);
       if (c) return c.id;
       if (!ouverte(s)) throw new Error('Épreuve fermée.');

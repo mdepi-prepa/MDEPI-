@@ -6,9 +6,10 @@ import { dateCourte, plageHoraire, versChampsDate, depuisChampsDate } from '../.
 import { enteteAdmin } from './index.js';
 import { casesPromos } from './annonces.js';
 import { etiquettes, vide } from '../commun.js';
+import { CATEGORIES, categorieDe, qcmLibre } from '../../lib/qcm.js';
 
 export async function vueAdminSeances(app) {
-  const seances = await app.api.seances();
+  const seances = (await app.api.seances()).filter((s) => !qcmLibre(s));
   const maintenant = new Date();
   const aVenir = seances.filter((s) => new Date(s.fin) > maintenant);
   const passees = seances.filter((s) => new Date(s.fin) <= maintenant).reverse();
@@ -54,6 +55,7 @@ const VIDE = {
   replay_url: '',
   replay_duree_min: null,
   modifiee_le: null,
+  categorie: 'conference',
 };
 
 // id : identifiant, ou « nouvelle ». copie : séance à dupliquer (même
@@ -108,6 +110,11 @@ export async function vueAdminSeance(app, { id, copie, epreuve }) {
         <label class="case"><input type="checkbox" name="epreuve" ${s.epreuve ? 'checked' : ''}> Épreuve notée (CCB, examen blanc)</label>
         ${nouvelle ? '' : html`<label class="case"><input type="checkbox" name="annulee" ${s.annulee ? 'checked' : ''}> Séance annulée</label>`}
       </div>
+      <fieldset class="cases" data-categorie ${s.epreuve ? '' : 'hidden'}><legend>Onglet dans Entraînement</legend>
+        <label class="case"><input type="radio" name="categorie" value="conference" ${categorieDe(s) === 'conference' ? 'checked' : ''}> ${CATEGORIES.conference} : épreuve notée à cette date (planning, classement), rejouable une fois finie</label>
+        <label class="case"><input type="radio" name="categorie" value="entrainement" ${categorieDe(s) === 'entrainement' ? 'checked' : ''}> ${CATEGORIES.entrainement} : disponible dans Entraînement dès cette date, avec la correction, hors planning</label>
+        <label class="case"><input type="radio" name="categorie" value="coaching" ${categorieDe(s) === 'coaching' ? 'checked' : ''}> ${CATEGORIES.coaching} : idem, dans l'onglet QCM coaching</label>
+      </fieldset>
       ${casesPromos('promos', s.promos)}
       <fieldset class="cases"><legend>Groupes de rotation (aucun coché = toute la promo)</legend>
         ${groupes.length
@@ -157,6 +164,8 @@ export async function vueAdminSeance(app, { id, copie, epreuve }) {
     form.matiere.addEventListener('change', () => {
       champMatiere.hidden = form.matiere.value !== '__autre';
       form.matiere_autre.required = !champMatiere.hidden;
+    const champCategorie = form.querySelector('[data-categorie]');
+    form.epreuve.addEventListener('change', () => (champCategorie.hidden = !form.epreuve.checked));
       if (!champMatiere.hidden) form.matiere_autre.focus();
     });
     form.matiere_autre.required = !champMatiere.hidden;
@@ -194,6 +203,7 @@ export async function vueAdminSeance(app, { id, copie, epreuve }) {
         presentiel: lieu !== 'En ligne',
         zoom_url: String(d.get('zoom_url')).trim() || null,
         epreuve: d.has('epreuve'),
+        categorie: d.has('epreuve') ? String(d.get('categorie') || 'conference') : 'conference',
         annulee: d.has('annulee'),
         promos,
         // Un groupe n'est gardé que si sa promo est cochée.
