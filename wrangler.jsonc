@@ -1,0 +1,10 @@
+// Déploiement Cloudflare Workers (assets statiques) : sert le dossier dist
+// produit par `npm run build`. Les adresses inconnues renvoient index.html.
+{
+  "name": "mdepi",
+  "compatibility_date": "2026-11-01",
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "single-page-application"
+  }
+}
