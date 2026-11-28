@@ -12,7 +12,7 @@ import { vuePlanning } from './views/planning.js';
 import { vueEpreuves } from './views/epreuves.js';
 import { vueSeance } from './views/seance.js';
 import { vueAnnonces } from './views/annonces.js';
-import { vueCartes, vueFiche } from './views/cartes.js';
+import { vueCartes, vueFiche, vueSynthese } from './views/cartes.js';
 import { vueProfil } from './views/profil.js';
 import { vueAdmin } from './views/admin/index.js';
 import { vueAdminComptes } from './views/admin/comptes.js';
@@ -42,6 +42,7 @@ const ROUTES = [
   ['cartes', vueCartes],
   ['cartes/lisa', (app) => vueCartes(app, { onglet: 'lisa' })],
   ['fiche/:id', vueFiche],
+  ['synthese/:item', vueSynthese],
   ['progres', vueProgres],
   ['profil', vueProfil],
   ['admin', vueAdmin, 'equipe'],
@@ -142,7 +143,7 @@ async function afficher() {
 
   const route = trouverRoute(chemin) || trouverRoute('accueil');
   const refuse = (route.acces === 'equipe' && !estEquipe(app.profil)) || (route.acces === 'admin' && app.profil.role !== 'admin');
-  const onglet = route.motif.startsWith('admin') ? 'admin' : route.motif.split('/')[0].replace(/^seance$/, 'planning').replace(/^epreuve$/, 'epreuves').replace(/^fiche$/, 'cartes');
+  const onglet = route.motif.startsWith('admin') ? 'admin' : route.motif.split('/')[0].replace(/^seance$/, 'planning').replace(/^epreuve$/, 'epreuves').replace(/^(fiche|synthese)$/, 'cartes');
 
   document.documentElement.style.setProperty('--accent', couleurPromo(app.profil.promo));
   if (!racine.querySelector('.coquille')) {
@@ -167,7 +168,7 @@ async function afficher() {
   // avec une valeur périmée…).
   const ancien = racine.querySelector('#contenu');
   const contenu = ancien.cloneNode(false);
-  contenu.classList.toggle('large', route.motif.startsWith('admin'));
+  contenu.classList.toggle('large', route.motif.startsWith('admin') || route.motif.startsWith('synthese'));
   contenu.innerHTML = String(vue.html);
   ancien.replaceWith(contenu);
   vue.monter?.(contenu);
