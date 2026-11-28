@@ -1000,3 +1000,40 @@ drop policy if exists qcm_images_lecture on storage.objects;
 create policy qcm_images_lecture on storage.objects for select to authenticated
   using (bucket_id = 'documents' and (storage.foldername(name))[1] = 'qcm'
          and public.image_qcm_visible(name));
+
+-- ---------------------------------------------------------------------
+-- Fiches de révision (onglet « Cartes ») : fiches synthétiques et fiches
+-- LiSA, en PDF, déposées par l'équipe pour une ou plusieurs promos.
+-- Fichiers dans le bucket « documents », dossier fiches/…
+-- ---------------------------------------------------------------------
+create table if not exists public.fiches (
+  id uuid primary key default gen_random_uuid(),
+  type text not null check (type in ('synthese','lisa')),
+  titre text not null,
+  matiere text not null default '',
+  item integer check (item between 1 and 999),   -- n° d'item du programme (facultatif)
+  promos text[] not null default '{D1,D2,D3,D4}',
+  chemin text not null unique,                    -- chemin dans le bucket « documents »
+  created_at timestamptz not null default now()
+);
+alter table public.fiches enable row level security;
+
+create or replace function public.peut_voir_fiche(p_promos text[])
+returns boolean language sql stable security definer set search_path = public as $$
+  select public.est_equipe() or coalesce((public.mon_profil()).promo = any (p_promos), false)
+$$;
+revoke execute on function public.peut_voir_fiche(text[]) from public, anon;
+grant execute on function public.peut_voir_fiche(text[]) to authenticated;
+
+drop policy if exists fiches_lecture on public.fiches;
+create policy fiches_lecture on public.fiches for select to authenticated
+  using (public.peut_voir_fiche(promos));
+drop policy if exists fiches_equipe on public.fiches;
+create policy fiches_equipe on public.fiches for all to authenticated
+  using (public.est_equipe()) with check (public.est_equipe());
+
+drop policy if exists fiches_fichiers_lecture on storage.objects;
+create policy fiches_fichiers_lecture on storage.objects for select to authenticated
+  using (bucket_id = 'documents' and (storage.foldername(name))[1] = 'fiches' and exists (
+    select 1 from public.fiches f
+    where f.chemin = storage.objects.name and public.peut_voir_fiche(f.promos)));

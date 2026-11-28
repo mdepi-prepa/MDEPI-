@@ -23,6 +23,7 @@ export async function vueAdmin(app) {
       <div class="grille-admin">
         ${tuile('#/admin/seances', icones.planning(18), 'Planning et replays', 'Créer, modifier ou annuler une séance, rattacher le replay Zoom, déposer les PDF.')}
         ${tuile('#/admin/epreuves', icones.epreuve(18), 'Épreuves', 'CCB et examens blancs, groupe par groupe : dates, lieux, sujets et corrections.')}
+        ${tuile('#/admin/fiches', icones.cartes(18), 'Fiches', 'Déposer les fiches synthétiques et les fiches LiSA (PDF) de l’onglet Cartes.')}
         ${admin ? tuile('#/admin/comptes', icones.reglages(18), 'Comptes', 'Importer les inscrits (CSV), promos, groupes de rotation, passage d’année.') : ''}
         ${admin ? tuile('#/admin/annonces', icones.cloche(18), 'Annonces', 'Publier une annonce pour une ou plusieurs promos.') : ''}
       </div>

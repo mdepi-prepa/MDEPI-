@@ -21,3 +21,9 @@ export function peutVoirAnnonce(profil, annonce) {
   if (!profil || profil.actif === false) return false;
   return estEquipe(profil) || annonce.promos.includes(profil.promo);
 }
+
+// Fiches de révision (onglet Cartes) : même règle que peut_voir_fiche.
+export function peutVoirFiche(profil, fiche) {
+  if (!profil || profil.actif === false) return false;
+  return estEquipe(profil) || fiche.promos.includes(profil.promo);
+}

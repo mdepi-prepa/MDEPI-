@@ -12,12 +12,13 @@ import { vuePlanning } from './views/planning.js';
 import { vueEpreuves } from './views/epreuves.js';
 import { vueSeance } from './views/seance.js';
 import { vueAnnonces } from './views/annonces.js';
-import { vueBientot } from './views/bientot.js';
+import { vueCartes } from './views/cartes.js';
 import { vueProfil } from './views/profil.js';
 import { vueAdmin } from './views/admin/index.js';
 import { vueAdminComptes } from './views/admin/comptes.js';
 import { vueAdminSeances, vueAdminSeance } from './views/admin/seances.js';
 import { vueAdminAnnonces } from './views/admin/annonces.js';
+import { vueAdminFiches } from './views/admin/fiches.js';
 import { vueAdminEpreuves } from './views/admin/epreuves.js';
 import { vuePassage, vueMaCorrection, reprendreEnvois } from './views/passage.js';
 import { vueEntrainement, vueRejouer, envoyerScoresEnAttente } from './views/entrainement.js';
@@ -38,7 +39,8 @@ const ROUTES = [
   ['annonces', vueAnnonces],
   ['entrainement', vueEntrainement],
   ['entrainement/:id', vueRejouer],
-  ['cartes', (app) => vueBientot(app, 'Cartes')],
+  ['cartes', vueCartes],
+  ['cartes/lisa', (app) => vueCartes(app, { onglet: 'lisa' })],
   ['progres', vueProgres],
   ['profil', vueProfil],
   ['admin', vueAdmin, 'equipe'],
@@ -55,6 +57,7 @@ const ROUTES = [
   ['admin/epreuves/:id/qroc', vueAdminQroc, 'equipe'],
   ['admin/epreuves/:id/copie/:user', vueAdminCopie, 'equipe'],
   ['admin/annonces', vueAdminAnnonces, 'admin'],
+  ['admin/fiches', vueAdminFiches, 'equipe'],
 ];
 
 function trouverRoute(chemin) {

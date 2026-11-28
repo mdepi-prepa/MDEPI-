@@ -290,6 +290,14 @@ a.ligne-info .lien-accent { display: inline-flex; align-items: center; gap: 4px;
 .infos { display: flex; flex-direction: column; gap: 6px; font-size: 14px; color: var(--encre-2); }
 .ligne-doc { display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 0 14px; background: none; border: none; width: 100%; text-align: left; cursor: pointer; font-size: 14px; font-weight: 500; }
 .ligne-doc span { flex: 1; }
+/* Fiches de révision (Cartes) */
+.ligne-fiche { padding: 10px 14px; }
+.ligne-fiche > svg { flex: none; color: var(--accent); }
+.ligne-fiche .pile-mini { flex: 1; min-width: 0; gap: 2px; }
+.ligne-fiche .pile-mini span, .ligne-fiche .etiquettes, .ligne-fiche .etiquettes span { flex: none; }
+.ligne-fiche .etiquettes { justify-content: flex-end; }
+@media (hover: hover) { .ligne-fiche:hover { background: #fafaf8; } }
+a.lien-petit { display: inline-flex; align-items: center; gap: 6px; }
 .ligne-info { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 14px; font-size: 14px; }
 .ligne-info > span:first-child { color: var(--encre-2); }
 .ligne-info strong { text-align: right; overflow-wrap: anywhere; }

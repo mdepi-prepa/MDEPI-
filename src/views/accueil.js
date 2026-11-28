@@ -65,9 +65,9 @@ export async function vueAccueil(app) {
     ${sectionPlanningGlobal()}
 
     <section class="pile-petite">
-      <h2 class="titre-section">Bientôt dans l'app</h2>
+      <h2 class="titre-section">Fiches de révision</h2>
       <a href="#/cartes" class="carte lien-ligne"><span class="tuile-icone">${icones.cartes(18)}</span>
-        <span class="tuile-texte">Flashcards en répétition espacée</span>${icones.chevron(16)}</a>
+        <span class="tuile-texte">Fiches synthétiques et fiches LiSA</span>${icones.chevron(16)}</a>
     </section>
 
     <section class="pile-petite">

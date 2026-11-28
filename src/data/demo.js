@@ -1,7 +1,7 @@
 // Mode démo : mêmes fonctions que supabase.js, avec des données fictives
 // gardées dans le navigateur. Sert à essayer l'app sans base de données
 // (préview, développement). Code de connexion : 123456.
-import { peutVoirSeance, peutVoirAnnonce, estAdmin, estEquipe } from '../lib/acces.js';
+import { peutVoirSeance, peutVoirAnnonce, peutVoirFiche, estAdmin, estEquipe } from '../lib/acces.js';
 import { serieDe, noterCopie, imagesUtilisees, renommerImages, qrocACorriger } from '../lib/qcm.js';
 import { corrigerQroc } from '../lib/qroc.js';
 import { QCM_DEMO } from './demo-qcm.js';
@@ -132,6 +132,18 @@ function donneesInitiales() {
     { id: uid(), seance_id: par('Infectio').id, type: 'support', titre: 'Sepsis – support', chemin: 'demo/support2.pdf' },
     { id: uid(), seance_id: par('CCB n°2').id, type: 'correction', titre: 'CCB n°2 – diapos de correction', chemin: 'demo/ccb2-correction.pdf' },
   ];
+  const fiche = (type, titre, matiere, item, promos = ['D1', 'D2', 'D3', 'D4']) =>
+    ({ id: uid(), type, titre, matiere, item, promos, chemin: `demo/fiches/${uid()}.pdf`, created_at: jour(-3, 9) });
+  const fiches = [
+    fiche('synthese', 'Diabète de type 2', 'Endocrinologie', 247, ['D2']),
+    fiche('synthese', 'Insuffisance cardiaque', 'Cardiologie', 234, ['D2', 'D3']),
+    fiche('synthese', 'Sepsis et choc septique', 'Infectiologie', 157, ['D2']),
+    fiche('synthese', 'Asthme de l’adulte', 'Pneumologie', 188, ['D2']),
+    fiche('lisa', 'Diabète sucré de types 1 et 2', 'Endocrinologie', 247),
+    fiche('lisa', 'Insuffisance cardiaque de l’adulte', 'Cardiologie', 234),
+    fiche('lisa', 'Bactériémie, fongémie, sepsis', 'Infectiologie', 157),
+    fiche('lisa', 'Hypertension artérielle de l’adulte', 'Cardiologie', 224),
+  ];
   const annonces = [
     { id: uid(), texte: 'CCB n°3 dans deux semaines, au 106 rue Sainte-Cécile. Arrivez 15 minutes en avance.', promos: ['D2'], publiee_le: jour(0, 8) },
     { id: uid(), texte: 'La conférence d’hématologie est annulée et sera reprogrammée.', promos: ['D2'], publiee_le: jour(0, 9) },
@@ -181,7 +193,7 @@ function donneesInitiales() {
     }
   }
 
-  return { groupes, inscrits, seances, documents, annonces, lues: {}, session: null, entrainements: [], ...qcm };
+  return { groupes, inscrits, seances, documents, fiches, annonces, lues: {}, session: null, entrainements: [], ...qcm };
 }
 
 // Range un QCM (dossiers issus de l'import) dans la base de démo.
@@ -204,7 +216,12 @@ function importer(db, serie, dossiers) {
 function charger() {
   try {
     const brut = localStorage.getItem(CLE);
-    if (brut) return JSON.parse(brut);
+    if (brut) {
+      const db = JSON.parse(brut);
+      // Démo enregistrée avant l'arrivée des fiches : on ajoute celles d'exemple.
+      db.fiches ??= donneesInitiales().fiches;
+      return db;
+    }
   } catch {
     /* stockage indisponible : on repart des données de démo */
   }
@@ -713,6 +730,23 @@ export function creerBackendDemo() {
     async supprimerDocument(doc) {
       exiger(estEquipe);
       db.documents = db.documents.filter((d) => d.id !== doc.id);
+      sauver();
+    },
+    async fiches() {
+      const p = profil();
+      const ordre = (a, b) => a.matiere.localeCompare(b.matiere) || (a.item ?? 1e9) - (b.item ?? 1e9) || a.titre.localeCompare(b.titre);
+      return db.fiches.filter((f) => peutVoirFiche(p, f)).sort(ordre);
+    },
+    async ajouterFiche({ type, titre, matiere, item, promos }, fichier) {
+      exiger(estEquipe);
+      const f = { id: uid(), type, titre, matiere, item: item || null, promos, chemin: `demo/fiches/${fichier.name}`, created_at: new Date().toISOString() };
+      db.fiches.push(f);
+      sauver();
+      return f;
+    },
+    async supprimerFiche(fiche) {
+      exiger(estEquipe);
+      db.fiches = db.fiches.filter((f) => f.id !== fiche.id);
       sauver();
     },
     async publierAnnonce(texte, promos) {

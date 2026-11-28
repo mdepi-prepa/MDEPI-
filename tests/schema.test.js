@@ -81,6 +81,9 @@ beforeAll(async () => {
   await db.query(`insert into documents (seance_id, type, titre, chemin) values ($1,'support','PDF D3','d3/support.pdf')`, [ids.seanceD3]);
   await db.query(`insert into storage.objects (bucket_id, name) values ('documents','d3/support.pdf')`);
   await db.query(`insert into annonces (texte, promos) values ('Pour D2','{D2}'),('Pour tous','{D1,D2,D3,D4}')`);
+  await db.query(`insert into fiches (type, titre, promos, chemin) values
+    ('synthese','Fiche D2','{D2}','fiches/d2.pdf'),('lisa','Fiche tous','{D1,D2,D3,D4}','fiches/tous.pdf')`);
+  await db.query(`insert into storage.objects (bucket_id, name) values ('documents','fiches/d2.pdf'),('documents','fiches/tous.pdf')`);
 });
 
 describe('inscription', () => {
@@ -146,8 +149,8 @@ describe('cloisonnement du planning', () => {
 
 describe('documents et fichiers', () => {
   it('un fichier de D3 est invisible pour la D2, visible pour la D3', async () => {
-    expect(await en(ids.camille, 'select name from storage.objects')).toEqual([]);
-    expect(await en(ids.ines, 'select name from storage.objects')).toEqual([{ name: 'd3/support.pdf' }]);
+    expect(await en(ids.camille, "select name from storage.objects where name not like 'fiches/%'")).toEqual([]);
+    expect(await en(ids.ines, "select name from storage.objects where name not like 'fiches/%'")).toEqual([{ name: 'd3/support.pdf' }]);
     expect((await en(ids.camille, 'select * from documents')).length).toBe(0);
   });
 });
@@ -158,6 +161,21 @@ describe('épreuves', () => {
     await en(ids.prof, `insert into documents (seance_id, type, titre, chemin) values ($1, 'sujet', 'Sujet', 'ccb/sujet.pdf')`, [e.id]);
     expect((await en(ids.leo, `select d.type from documents d join seances s on s.id = d.seance_id where s.epreuve`))).toEqual([{ type: 'sujet' }]);
     expect(await en(ids.camille, `select * from documents where seance_id = $1`, [e.id])).toEqual([]);
+  });
+});
+
+describe('fiches (onglet Cartes)', () => {
+  it('chaque promo ne voit que ses fiches et leurs fichiers', async () => {
+    expect((await en(ids.camille, 'select titre from fiches order by titre')).map((r) => r.titre)).toEqual(['Fiche D2', 'Fiche tous']);
+    expect((await en(ids.ines, 'select titre from fiches')).map((r) => r.titre)).toEqual(['Fiche tous']);
+    expect((await en(ids.ines, `select name from storage.objects where name like 'fiches/%'`)).map((r) => r.name)).toEqual(['fiches/tous.pdf']);
+    expect(await en(null, 'select titre from fiches')).toEqual([]);
+  });
+  it("seule l'équipe dépose ou retire une fiche", async () => {
+    await expect(en(ids.camille, `insert into fiches (type, titre, chemin) values ('lisa','x','fiches/x.pdf')`)).rejects.toThrow(/row-level security/);
+    const r = await en(ids.prof, `insert into fiches (type, titre, chemin) values ('lisa','Prof','fiches/prof.pdf') returning titre`);
+    expect(r).toEqual([{ titre: 'Prof' }]);
+    expect(await en(ids.camille, `delete from fiches returning id`)).toEqual([]);
   });
 });
 

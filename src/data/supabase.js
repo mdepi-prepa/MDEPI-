@@ -382,6 +382,29 @@ export function creerBackendSupabase(url, cleAnon) {
       const { error } = await sb.storage.from('documents').remove([doc.chemin]);
       if (error) console.warn('Fichier non supprimé du stockage :', error.message);
     },
+    // ---------- Fiches (onglet Cartes) ----------
+    async fiches() {
+      // Base pas encore mise à jour (table absente) : aucune fiche plutôt qu'une erreur.
+      const r = await sb.from('fiches').select('*').order('matiere').order('item', { nullsFirst: false }).order('titre');
+      if (r.error && /fiches/.test(r.error.message || '') && /exist|schema cache/i.test(r.error.message || '')) return [];
+      return verifier(r);
+    },
+    async ajouterFiche({ type, titre, matiere, item, promos }, fichier) {
+      const propre = fichier.name.normalize('NFD').replace(/[^\w.-]+/g, '_');
+      const chemin = `fiches/${Date.now()}-${propre}`;
+      verifier(await sb.storage.from('documents').upload(chemin, fichier, { contentType: fichier.type || 'application/pdf' }));
+      const r = await sb.from('fiches').insert({ type, titre, matiere, item: item || null, promos, chemin }).select().single();
+      if (r.error) await sb.storage.from('documents').remove([chemin]);
+      return verifier(r);
+    },
+    async supprimerFiche(fiche) {
+      if (!fiche) throw new Error('Fiche introuvable : rechargez la page.');
+      const r = await sb.from('fiches').delete().eq('id', fiche.id).select('id');
+      verifier(r);
+      if (!r.data?.length) throw new Error("La fiche n'a pas pu être retirée (droits insuffisants ?).");
+      const { error } = await sb.storage.from('documents').remove([fiche.chemin]);
+      if (error) console.warn('Fichier non supprimé du stockage :', error.message);
+    },
     async publierAnnonce(texte, promos) {
       return verifier(await sb.from('annonces').insert({ texte, promos }).select().single());
     },
