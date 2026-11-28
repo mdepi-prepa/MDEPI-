@@ -171,6 +171,14 @@ describe('fiches (onglet Cartes)', () => {
     expect((await en(ids.ines, `select name from storage.objects where name like 'fiches/%'`)).map((r) => r.name)).toEqual(['fiches/tous.pdf']);
     expect(await en(null, 'select titre from fiches')).toEqual([]);
   });
+  it('fiches LiSA importées : contenu lisible par la promo, réimport par la clé', async () => {
+    const ajout = `insert into fiches (type, titre, item, matiere, promos, cle, contenu) values ('lisa', $1, 222, 'Cardiologie', '{D2}', 'lisa-222', $2)
+      on conflict (cle) do update set titre = excluded.titre, contenu = excluded.contenu returning titre`;
+    await en(ids.prof, ajout, ['FDR CV', '<p>v1</p>']);
+    await en(ids.prof, ajout, ['FDR CV (maj)', '<p>v2</p>']);
+    expect(await en(ids.camille, `select titre, contenu, chemin from fiches where cle = 'lisa-222'`)).toEqual([{ titre: 'FDR CV (maj)', contenu: '<p>v2</p>', chemin: null }]);
+    expect(await en(ids.ines, `select id from fiches where cle = 'lisa-222'`)).toEqual([]);
+  });
   it("seule l'équipe dépose ou retire une fiche", async () => {
     await expect(en(ids.camille, `insert into fiches (type, titre, chemin) values ('lisa','x','fiches/x.pdf')`)).rejects.toThrow(/row-level security/);
     const r = await en(ids.prof, `insert into fiches (type, titre, chemin) values ('lisa','Prof','fiches/prof.pdf') returning titre`);

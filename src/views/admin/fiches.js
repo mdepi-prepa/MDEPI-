@@ -12,7 +12,9 @@ export async function vueAdminFiches(app) {
 
   const ligne = (f) => html`<div class="ligne-info">
       <span class="pile-mini">
-        <button class="btn lien" type="button" data-ouvrir="${f.chemin}">${f.titre}</button>
+        ${f.chemin
+          ? html`<button class="btn lien" type="button" data-ouvrir="${f.chemin}">${f.titre}</button>`
+          : html`<a class="btn lien" href="#/fiche/${f.id}">${f.titre}</a>`}
         ${f.item ? html`<span class="aide">Item ${f.item}</span>` : ''}
         <span class="etiquettes">${etiquettesPromo(f.promos)}</span>
       </span>
@@ -33,6 +35,14 @@ export async function vueAdminFiches(app) {
 
   const vue = html`<div class="page">
     ${enteteAdmin('Fiches')}
+    <form class="carte pile" id="f-lisa">
+      <h2 class="titre-section">Importer les fiches LiSA</h2>
+      <p class="aide">Choisissez le fichier exporté « LiSA 2026 · Fiches items » (.html). Chaque item devient une fiche de l'onglet Fiches LiSA, rangée dans sa matière et étiquetée avec son numéro d'item. Les étudiants la lisent directement dans l'app. Un nouvel import met à jour les fiches déjà présentes (même numéro d'item).</p>
+      ${casesPromos('promos', CODES_PROMOS)}
+      <label class="champ"><span>Fichier LiSA (.html)</span><input type="file" name="fichier" accept=".html,.htm,text/html" required></label>
+      <p class="aide" data-etat role="status" hidden></p>
+      <button class="btn plein" type="submit">Importer</button>
+    </form>
     <form class="carte pile" id="f-fiche">
       <h2 class="titre-section">Déposer des fiches</h2>
       <fieldset class="cases"><legend>Onglet</legend>
@@ -58,6 +68,37 @@ export async function vueAdminFiches(app) {
   </div>`;
 
   function monter(el) {
+    const lisa = el.querySelector('#f-lisa');
+    lisa.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const d = new FormData(lisa);
+      const promos = d.getAll('promos');
+      if (!promos.length) return app.message('Cochez au moins une promo.', 'erreur');
+      const fichier = d.get('fichier');
+      if (!fichier || !fichier.size) return app.message('Choisissez le fichier LiSA.', 'erreur');
+      const bouton = lisa.querySelector('[type=submit]');
+      const etat = lisa.querySelector('[data-etat]');
+      const dire = (t) => {
+        etat.hidden = false;
+        etat.textContent = t;
+      };
+      bouton.disabled = true;
+      try {
+        dire('Lecture du fichier…');
+        const [{ lireExportLisa }, texte] = await Promise.all([import('../../lib/lisa.js'), fichier.text()]);
+        await new Promise((r) => setTimeout(r, 30)); // laisse le message s'afficher
+        const fiches = lireExportLisa(texte);
+        dire(`${fiches.length} fiches trouvées. Envoi…`);
+        const n = await app.api.importerFichesLisa(fiches, promos, (faites, total) => dire(`Envoi : ${faites} / ${total} fiches…`));
+        app.message(`${n} fiches LiSA importées.`);
+        app.rafraichir();
+      } catch (err) {
+        dire(`Import interrompu : ${err.message}`);
+        app.message(err.message, 'erreur');
+        bouton.disabled = false;
+      }
+    });
+
     const form = el.querySelector('#f-fiche');
     form.addEventListener('submit', async (e) => {
       e.preventDefault();

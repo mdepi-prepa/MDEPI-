@@ -1017,6 +1017,14 @@ create table if not exists public.fiches (
   created_at timestamptz not null default now()
 );
 alter table public.fiches enable row level security;
+-- Fiches LiSA importées depuis le livret (back-office › Fiches › Importer) :
+-- contenu HTML lu dans l'app (pas de PDF), clé « lisa-<n° d'item> » pour
+-- mettre à jour la même fiche à chaque nouvel import, lien vers la page LiSA.
+alter table public.fiches alter column chemin drop not null;
+alter table public.fiches add column if not exists contenu text;
+alter table public.fiches add column if not exists cle text;
+alter table public.fiches add column if not exists lien text;
+create unique index if not exists fiches_cle_idx on public.fiches (cle);
 
 create or replace function public.peut_voir_fiche(p_promos text[])
 returns boolean language sql stable security definer set search_path = public as $$

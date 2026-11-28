@@ -30,6 +30,14 @@ export function creerBackendSupabase(url, cleAnon) {
       if (page.length < PAGE) return lignes;
     }
   };
+  // Comme toutLire, mais rend { data, error } au lieu de lever l'erreur.
+  const toutLireBrut = async (requete) => {
+    try {
+      return { data: await toutLire(requete), error: null };
+    } catch (e) {
+      return { data: null, error: { message: e.message } };
+    }
+  };
   // Écart entre l'horloge du serveur et celle de l'appareil (en ms).
   let decalage = null;
 
@@ -384,10 +392,38 @@ export function creerBackendSupabase(url, cleAnon) {
     },
     // ---------- Fiches (onglet Cartes) ----------
     async fiches() {
-      // Base pas encore mise à jour (table absente) : aucune fiche plutôt qu'une erreur.
-      const r = await sb.from('fiches').select('*').order('matiere').order('item', { nullsFirst: false }).order('titre');
+      // Liste sans le contenu des fiches LiSA (lu seulement à l'ouverture d'une fiche).
+      // Base pas encore mise à jour (table ou colonne absente) : aucune fiche plutôt qu'une erreur.
+      const r = await toutLireBrut(() =>
+        sb.from('fiches').select('id,type,titre,matiere,item,promos,chemin,cle,lien,created_at').order('matiere').order('item', { nullsFirst: false }).order('titre')
+      );
       if (r.error && /fiches/.test(r.error.message || '') && /exist|schema cache/i.test(r.error.message || '')) return [];
       return verifier(r);
+    },
+    async fiche(id) {
+      return verifier(await sb.from('fiches').select('*').eq('id', id).maybeSingle());
+    },
+    // Fiches LiSA lues dans le fichier exporté : créées ou mises à jour (même
+    // n° d'item = même fiche), par paquets pour ne pas envoyer 10 Mo d'un coup.
+    async importerFichesLisa(fiches, promos, progression = () => {}) {
+      let paquet = [];
+      let taille = 0;
+      let faites = 0;
+      const envoyer = async () => {
+        if (!paquet.length) return;
+        verifier(await sb.from('fiches').upsert(paquet, { onConflict: 'cle' }));
+        faites += paquet.length;
+        progression(faites, fiches.length);
+        paquet = [];
+        taille = 0;
+      };
+      for (const f of fiches) {
+        paquet.push({ ...f, promos, chemin: null });
+        taille += f.contenu.length;
+        if (taille > 800000 || paquet.length >= 40) await envoyer();
+      }
+      await envoyer();
+      return faites;
     },
     async ajouterFiche({ type, titre, matiere, item, promos }, fichier) {
       const propre = fichier.name.normalize('NFD').replace(/[^\w.-]+/g, '_');
@@ -402,6 +438,7 @@ export function creerBackendSupabase(url, cleAnon) {
       const r = await sb.from('fiches').delete().eq('id', fiche.id).select('id');
       verifier(r);
       if (!r.data?.length) throw new Error("La fiche n'a pas pu être retirée (droits insuffisants ?).");
+      if (!fiche.chemin) return; // fiche LiSA : pas de fichier
       const { error } = await sb.storage.from('documents').remove([fiche.chemin]);
       if (error) console.warn('Fichier non supprimé du stockage :', error.message);
     },

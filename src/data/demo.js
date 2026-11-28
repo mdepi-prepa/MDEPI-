@@ -139,10 +139,6 @@ function donneesInitiales() {
     fiche('synthese', 'Insuffisance cardiaque', 'Cardiologie', 234, ['D2', 'D3']),
     fiche('synthese', 'Sepsis et choc septique', 'Infectiologie', 157, ['D2']),
     fiche('synthese', 'Asthme de l’adulte', 'Pneumologie', 188, ['D2']),
-    fiche('lisa', 'Diabète sucré de types 1 et 2', 'Endocrinologie', 247),
-    fiche('lisa', 'Insuffisance cardiaque de l’adulte', 'Cardiologie', 234),
-    fiche('lisa', 'Bactériémie, fongémie, sepsis', 'Infectiologie', 157),
-    fiche('lisa', 'Hypertension artérielle de l’adulte', 'Cardiologie', 224),
   ];
   const annonces = [
     { id: uid(), texte: 'CCB n°3 dans deux semaines, au 106 rue Sainte-Cécile. Arrivez 15 minutes en avance.', promos: ['D2'], publiee_le: jour(0, 8) },
@@ -248,6 +244,22 @@ export function creerBackendDemo() {
     if (!test(profil())) throw new Error("Vous n'avez pas les droits pour cette action.");
   };
   const notifier = (evt) => ecouteurs.forEach((cb) => cb(evt));
+  // Fiches LiSA : titres des 367 items chargés à la première ouverture de
+  // Cartes ; leur contenu reste en mémoire (trop gros pour le stockage du
+  // navigateur), seuls quelques exemples sont fournis.
+  const contenus = new Map();
+  let lisaCharge = null;
+  const chargerLisa = () =>
+    (lisaCharge ??= import('./demo-lisa.js').then(({ ITEMS_LISA, CONTENUS_LISA }) => {
+      for (const [n, c] of Object.entries(CONTENUS_LISA)) if (!contenus.has(`lisa-${n}`)) contenus.set(`lisa-${n}`, c);
+      if (db.lisaDemo) return;
+      db.fiches = db.fiches.filter((f) => f.type !== 'lisa');
+      for (const [item, titre, matiere] of ITEMS_LISA) {
+        db.fiches.push({ id: uid(), type: 'lisa', cle: `lisa-${item}`, item, titre, matiere, promos: ['D1', 'D2', 'D3', 'D4'], chemin: null, created_at: jour(-1, 9) });
+      }
+      db.lisaDemo = true;
+      sauver();
+    }));
   const ouverte = (s) => s.epreuve && !s.annulee && new Date(s.debut) <= new Date() && new Date() <= new Date(new Date(s.fin).getTime() + 2 * 60000);
   const serieVisible = (serie, test) => estEquipe(profil()) || db.seances.some((x) => serieDe(x) === serie && peutVoirSeance(profil(), x) && test(x));
   const voirSujet = (serie) => serieVisible(serie, (x) => !x.annulee && new Date(x.debut) <= new Date());
@@ -733,9 +745,32 @@ export function creerBackendDemo() {
       sauver();
     },
     async fiches() {
+      await chargerLisa();
       const p = profil();
       const ordre = (a, b) => a.matiere.localeCompare(b.matiere) || (a.item ?? 1e9) - (b.item ?? 1e9) || a.titre.localeCompare(b.titre);
       return db.fiches.filter((f) => peutVoirFiche(p, f)).sort(ordre);
+    },
+    async fiche(id) {
+      await chargerLisa();
+      const f = db.fiches.find((x) => x.id === id);
+      if (!f || !peutVoirFiche(profil(), f)) return null;
+      return { ...f, contenu: contenus.get(f.cle) ?? null };
+    },
+    async importerFichesLisa(fiches, promos, progression = () => {}) {
+      exiger(estEquipe);
+      await chargerLisa();
+      let faites = 0;
+      for (const f of fiches) {
+        const { contenu, ...ligne } = f;
+        const deja = db.fiches.find((x) => x.cle === f.cle);
+        if (deja) Object.assign(deja, ligne, { promos, chemin: null });
+        else db.fiches.push({ id: uid(), ...ligne, promos, chemin: null, created_at: new Date().toISOString() });
+        contenus.set(f.cle, contenu);
+        if (++faites % 40 === 0) progression(faites, fiches.length);
+      }
+      progression(faites, fiches.length);
+      sauver();
+      return faites;
     },
     async ajouterFiche({ type, titre, matiere, item, promos }, fichier) {
       exiger(estEquipe);
@@ -747,6 +782,7 @@ export function creerBackendDemo() {
     async supprimerFiche(fiche) {
       exiger(estEquipe);
       db.fiches = db.fiches.filter((f) => f.id !== fiche.id);
+      if (fiche.cle) contenus.delete(fiche.cle);
       sauver();
     },
     async publierAnnonce(texte, promos) {

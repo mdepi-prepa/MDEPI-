@@ -12,7 +12,7 @@ import { vuePlanning } from './views/planning.js';
 import { vueEpreuves } from './views/epreuves.js';
 import { vueSeance } from './views/seance.js';
 import { vueAnnonces } from './views/annonces.js';
-import { vueCartes } from './views/cartes.js';
+import { vueCartes, vueFiche } from './views/cartes.js';
 import { vueProfil } from './views/profil.js';
 import { vueAdmin } from './views/admin/index.js';
 import { vueAdminComptes } from './views/admin/comptes.js';
@@ -41,6 +41,7 @@ const ROUTES = [
   ['entrainement/:id', vueRejouer],
   ['cartes', vueCartes],
   ['cartes/lisa', (app) => vueCartes(app, { onglet: 'lisa' })],
+  ['fiche/:id', vueFiche],
   ['progres', vueProgres],
   ['profil', vueProfil],
   ['admin', vueAdmin, 'equipe'],
@@ -141,7 +142,7 @@ async function afficher() {
 
   const route = trouverRoute(chemin) || trouverRoute('accueil');
   const refuse = (route.acces === 'equipe' && !estEquipe(app.profil)) || (route.acces === 'admin' && app.profil.role !== 'admin');
-  const onglet = route.motif.startsWith('admin') ? 'admin' : route.motif.split('/')[0].replace(/^seance$/, 'planning').replace(/^epreuve$/, 'epreuves');
+  const onglet = route.motif.startsWith('admin') ? 'admin' : route.motif.split('/')[0].replace(/^seance$/, 'planning').replace(/^epreuve$/, 'epreuves').replace(/^fiche$/, 'cartes');
 
   document.documentElement.style.setProperty('--accent', couleurPromo(app.profil.promo));
   if (!racine.querySelector('.coquille')) {
